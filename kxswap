@@ -1,9 +1,50 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+IFS=$'\n\t'
 
-if [ $# -lt 1 ]; then
-  echo "Uso: kxswap <nome>"
+SCRIPT_NAME="$(basename "$0")"
+
+usage() {
+  cat <<EOF
+Uso: $SCRIPT_NAME <nome>
+
+Descrição:
+  Troca o kubeconfig ativo (~/.kube/config) para o projeto especificado.
+  O ficheiro ~/.kube/config-<nome> será copiado para ~/.kube/config.
+
+Opções:
+  -h, --help    Mostra esta ajuda e sai.
+
+Exemplos:
+  $SCRIPT_NAME dev
+  $SCRIPT_NAME prod
+EOF
+}
+
+log() {
+  echo "[$SCRIPT_NAME] $*"
+}
+
+err() {
+  echo "[$SCRIPT_NAME] ERRO: $*" >&2
+}
+
+if [ $# -eq 0 ]; then
+  err "Nenhum argumento fornecido."
+  usage
+  exit 1
+fi
+
+# Verificar se é pedido help
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if [ $# -gt 1 ]; then
+  err "Demasiados argumentos fornecidos."
+  usage
   exit 1
 fi
 
@@ -11,24 +52,40 @@ NAME="$1"
 SRC="$HOME/.kube/config-$NAME"
 DEST="$HOME/.kube/config"
 
-# validar origem
+# Validar origem
 if [ ! -f "$SRC" ]; then
-  echo "Erro: Ficheiro não existe: $SRC"
+  err "Ficheiro de origem não existe: $SRC"
+  err "Certifica-te de que o projeto '$NAME' existe (usa kxmerge para criar)."
   exit 1
 fi
 
-# swap silencioso
-cp "$SRC" "$DEST" 2>/dev/null || {
-  echo "Erro ao aplicar kubeconfig."
-  exit 1
-}
-
-# forçar namespace default sem output
+# Validar kubeconfig antes de copiar (se kubectl estiver disponível)
 if command -v kubectl >/dev/null 2>&1; then
-  KUBECONFIG="$DEST" kubectl config set-context --current --namespace=default >/dev/null 2>&1 || {
-    echo "Aviso: não foi possível definir o namespace 'default'."
-  }
+  if ! kubectl --kubeconfig="$SRC" config view >/dev/null 2>&1; then
+    err "'$SRC' não parece ser um kubeconfig válido (kubectl não o conseguiu ler)."
+    exit 1
+  fi
+else
+  log "Aviso: kubectl não encontrado no PATH. O kubeconfig será copiado sem validação."
 fi
 
-# output básico
+# Criar diretório de destino se não existir
+mkdir -p "$(dirname "$DEST")"
+
+# Copiar kubeconfig
+if ! cp "$SRC" "$DEST" 2>/dev/null; then
+  err "Falha ao copiar kubeconfig de '$SRC' para '$DEST'."
+  err "Verifica as permissões do diretório ~/.kube/"
+  exit 1
+fi
+
+log "Kubeconfig ativo agora é: $DEST (copiado de $SRC)"
+log "kubectx / kubectl já estão a usar este projeto."
+
+# Forçar namespace default
+if command -v kubectl >/dev/null 2>&1; then
+  if ! KUBECONFIG="$DEST" kubectl config set-context --current --namespace=default >/dev/null 2>&1; then
+    log "Aviso: não foi possível definir o namespace 'default' (pode não haver contexto ativo)."
+  fi
+fi
 echo "Config aplicada: $NAME"

@@ -325,7 +325,6 @@ if [ ! -f "$KUBE_CONFIG" ]; then
     kxswap "${PROJECT}" || log "Aviso: kxswap falhou ao aplicar configuração ativa."
   fi
 
-exit 0
   exit 0
 fi
 
@@ -389,7 +388,6 @@ log "Atualização concluída em: $KUBE_CONFIG"
 [ -n "$RENAME_OLD" ] && log "Contexto '${RENAME_OLD}' foi renomeado para '${RENAME_NEW}'."
 [ -n "$DELETE_CONTEXT" ] && log "Contexto '${DELETE_CONTEXT}' foi removido do kubeconfig master."
 log "Se algo correr mal, podes restaurar a partir de: $BACKUP"
-log "Atualização concluída em: $KUBE_CONFIG"
 
 # aplicar via kxswap automaticamente
 if command -v kxswap >/dev/null 2>&1; then
