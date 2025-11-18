@@ -17,13 +17,6 @@ if [ ! -f "$SRC" ]; then
   exit 1
 fi
 
-# backup do config atual, se existir (podes simplificar se quiseres)
-if [ -f "$DEST" ]; then
-  BACKUP="${DEST}.$(date +%Y%m%d%H%M%S).bak"
-  cp "$DEST" "$BACKUP"
-  echo "Backup criado: $BACKUP"
-fi
-
 # sobrescreve o config atual com o config-<nome>
 cp "$SRC" "$DEST"
 echo "Kubeconfig ativo agora é: $DEST (copiado de $SRC)"
