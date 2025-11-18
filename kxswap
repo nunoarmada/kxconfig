@@ -1,50 +1,30 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
 
-# kubectx swap file
-kxswap() {
-  if [ -z "$1" ]; then
-    echo "Uso: kxswap <nome>"
-    echo "Vai usar ~/.kube/config-<nome> como base."
-    return 1
-  fi
+if [ $# -lt 1 ]; then
+  echo "Uso: kxswap <nome>"
+  echo "Vai usar ~/.kube/config-<nome> como base."
+  exit 1
+fi
 
-  local NAME="$1"
-  local SRC="$HOME/.kube/config-$NAME"
-  local DEST="$HOME/.kube/config"
+NAME="$1"
+SRC="$HOME/.kube/config-$NAME"
+DEST="$HOME/.kube/config"
 
-  if [ ! -f "$SRC" ]; then
-    echo "Ficheiro de origem não existe: $SRC"
-    return 1
-  fi
+if [ ! -f "$SRC" ]; then
+  echo "Ficheiro de origem não existe: $SRC"
+  exit 1
+fi
 
-  # backup do config atual, se existir
-  if [ -f "$DEST" ]; then
-    local BACKUP="${DEST}.$(date +%Y%m%d%H%M%S).bak"
-    cp "$DEST" "$BACKUP"
-    echo "Backup criado: $BACKUP"
-  fi
+# backup do config atual, se existir (podes simplificar se quiseres)
+if [ -f "$DEST" ]; then
+  BACKUP="${DEST}.$(date +%Y%m%d%H%M%S).bak"
+  cp "$DEST" "$BACKUP"
+  echo "Backup criado: $BACKUP"
+fi
 
-  # sobrescreve o config atual com o config-<nome>
-  cp "$SRC" "$DEST"
-  echo "Kubeconfig ativo agora é: $DEST (copiado de $SRC)"
-  echo "kubectx / kubectl já estão a usar este projeto."
-}
-
-# Autocomplete para kxswap em zsh
-_kxswap_complete() {
-  local -a configs
-  local dir="$HOME/.kube"
-
-  configs=(${dir}/config-*)
-
-  # Se não houver ficheiros, não sugere nada
-  [[ ${#configs[@]} -eq 0 ]] && return 0
-
-  # Extrai só o "<nome>" de "config-<nome>"
-  configs=(${configs##*config-})
-
-  compadd -- $configs
-}
-
-compdef _kxswap_complete kxswap
+# sobrescreve o config atual com o config-<nome>
+cp "$SRC" "$DEST"
+echo "Kubeconfig ativo agora é: $DEST (copiado de $SRC)"
+echo "kubectx / kubectl já estão a usar este projeto."
