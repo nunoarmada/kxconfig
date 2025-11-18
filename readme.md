@@ -16,13 +16,13 @@ O `kubectx-merge` é um conjunto de ferramentas que permite gerir kubeconfigs do
 ### kxmerge
 
 - ✅ **Merge** de novos kubeconfigs num master por projeto (`~/.kube/config-<nome>`)
-- ✅ **Renomear contextos** dentro de um kubeconfig master
-- ✅ **Remover contextos** de um kubeconfig master
+- ✅ **Renomear contextos** nos ficheiros master (não no `~/.kube/config` ativo)
+- ✅ **Remover contextos** dos ficheiros master (não do `~/.kube/config` ativo)
 - ✅ **Criar novos projetos** interativamente
 - ✅ **Backup automático** antes de qualquer alteração
 - ✅ **Validação** de kubeconfigs antes de processar
 - ✅ **Deteção de "nada a fazer"** (evita alterações desnecessárias)
-- ✅ **Integração automática** com `kxswap` (se disponível)
+- ✅ **Integração automática** com `kxswap` (se disponível) para aplicar alterações ao config ativo
 
 ### kxswap
 
@@ -84,6 +84,8 @@ kxmerge -p dev -m kubeconfig-dev.yaml
 
 #### Renomear um contexto
 
+**Nota**: Esta operação renomeia contextos no ficheiro master do projeto (`~/.kube/config-<nome>`), não no `~/.kube/config` ativo.
+
 ```bash
 # Renomear contexto (escolhe projeto interativamente)
 kxmerge -r old-context-name new-context-name
@@ -93,6 +95,8 @@ kxmerge -p dev -r old-context-name new-context-name
 ```
 
 #### Remover um contexto
+
+**Nota**: Esta operação remove contextos do ficheiro master do projeto (`~/.kube/config-<nome>`), não do `~/.kube/config` ativo.
 
 ```bash
 # Remover contexto (escolhe projeto interativamente)
@@ -190,7 +194,7 @@ kubectl get pods
 
 3. **Segurança**: Os ficheiros de kubeconfig contêm credenciais sensíveis. Garante que tens as permissões adequadas configuradas.
 
-4. **Integração com kxswap**: Se o `kxswap` estiver disponível no PATH, o `kxmerge` tentará automaticamente aplicar as alterações ao kubeconfig ativo.
+4. **Integração com kxswap**: Todas as operações do `kxmerge` são feitas nos ficheiros master (`~/.kube/config-<nome>`). Se o `kxswap` estiver disponível no PATH, o `kxmerge` tentará automaticamente aplicar essas alterações ao kubeconfig ativo (`~/.kube/config`) após concluir as operações.
 
 ## 🐛 Troubleshooting
 
