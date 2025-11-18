@@ -4,7 +4,6 @@ set -euo pipefail
 
 if [ $# -lt 1 ]; then
   echo "Uso: kxswap <nome>"
-  echo "Vai usar ~/.kube/config-<nome> como base."
   exit 1
 fi
 
@@ -12,12 +11,24 @@ NAME="$1"
 SRC="$HOME/.kube/config-$NAME"
 DEST="$HOME/.kube/config"
 
+# validar origem
 if [ ! -f "$SRC" ]; then
-  echo "Ficheiro de origem não existe: $SRC"
+  echo "Erro: Ficheiro não existe: $SRC"
   exit 1
 fi
 
-# sobrescreve o config atual com o config-<nome>
-cp "$SRC" "$DEST"
-echo "Kubeconfig ativo agora é: $DEST (copiado de $SRC)"
-echo "kubectx / kubectl já estão a usar este projeto."
+# swap silencioso
+cp "$SRC" "$DEST" 2>/dev/null || {
+  echo "Erro ao aplicar kubeconfig."
+  exit 1
+}
+
+# forçar namespace default sem output
+if command -v kubectl >/dev/null 2>&1; then
+  KUBECONFIG="$DEST" kubectl config set-context --current --namespace=default >/dev/null 2>&1 || {
+    echo "Aviso: não foi possível definir o namespace 'default'."
+  }
+fi
+
+# output básico
+echo "Config aplicada: $NAME"
