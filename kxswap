@@ -22,10 +22,6 @@ Exemplos:
 EOF
 }
 
-log() {
-  echo "[$SCRIPT_NAME] $*"
-}
-
 err() {
   echo "[$SCRIPT_NAME] ERRO: $*" >&2
 }
@@ -65,8 +61,6 @@ if command -v kubectl >/dev/null 2>&1; then
     err "'$SRC' não parece ser um kubeconfig válido (kubectl não o conseguiu ler)."
     exit 1
   fi
-else
-  log "Aviso: kubectl não encontrado no PATH. O kubeconfig será copiado sem validação."
 fi
 
 # Criar diretório de destino se não existir
@@ -79,13 +73,9 @@ if ! cp "$SRC" "$DEST" 2>/dev/null; then
   exit 1
 fi
 
-log "Kubeconfig ativo agora é: $DEST (copiado de $SRC)"
-log "kubectx / kubectl já estão a usar este projeto."
-
-# Forçar namespace default
+# Forçar namespace default (silencioso)
 if command -v kubectl >/dev/null 2>&1; then
-  if ! KUBECONFIG="$DEST" kubectl config set-context --current --namespace=default >/dev/null 2>&1; then
-    log "Aviso: não foi possível definir o namespace 'default' (pode não haver contexto ativo)."
-  fi
+  KUBECONFIG="$DEST" kubectl config set-context --current --namespace=default >/dev/null 2>&1 || true
 fi
+
 echo "Config aplicada: $NAME"
