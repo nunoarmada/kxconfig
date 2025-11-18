@@ -16,8 +16,8 @@ O `kubectx-merge` é um conjunto de ferramentas que permite gerir kubeconfigs do
 ### kxmerge
 
 - ✅ **Merge** de novos kubeconfigs num master por projeto (`~/.kube/config-<nome>`)
-- ✅ **Renomear contextos** nos ficheiros master (não no `~/.kube/config` ativo)
-- ✅ **Remover contextos** dos ficheiros master (não do `~/.kube/config` ativo)
+- ✅ **Renomear contextos** nos ficheiros master (`~/.kube/config-<nome>`)
+- ✅ **Remover contextos** dos ficheiros master (`~/.kube/config-<nome>`)
 - ✅ **Criar novos projetos** interativamente
 - ✅ **Backup automático** antes de qualquer alteração
 - ✅ **Validação** de kubeconfigs antes de processar
