@@ -51,7 +51,7 @@ Temos todo o gosto em ouvir as tuas ideias! Para sugerir uma nova funcionalidade
 3. Testa as alterações:
    ```bash
    # Testa os scripts manualmente
-   ./kxmerge --help
+   ./kxconfig --help
    ./kxswap dev
    ```
 

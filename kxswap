@@ -51,7 +51,7 @@ DEST="$HOME/.kube/config"
 # Validar origem
 if [ ! -f "$SRC" ]; then
   err "Ficheiro de origem não existe: $SRC"
-  err "Certifica-te de que o projeto '$NAME' existe (usa kxmerge para criar)."
+  err "Certifica-te de que o projeto '$NAME' existe (usa kxconfig para criar)."
   exit 1
 fi
 

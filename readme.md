@@ -8,12 +8,12 @@ O `kubectx-merge` é um conjunto de ferramentas que permite gerir kubeconfigs do
 
 ### Componentes
 
-- **`kxmerge`**: Ferramenta principal para fazer merge, renomear e remover contextos de kubeconfigs organizados por projeto
+- **`kxconfig`**: Ferramenta principal para fazer merge, renomear e remover contextos de kubeconfigs organizados por projeto
 - **`kxswap`**: Ferramenta auxiliar para trocar rapidamente o kubeconfig ativo para um projeto específico
 
 ## ✨ Funcionalidades
 
-### kxmerge
+### kxconfig
 
 - ✅ **Merge** de novos kubeconfigs num master por projeto (`~/.kube/config-<nome>`)
 - ✅ **Renomear contextos** nos ficheiros master (`~/.kube/config-<nome>`)
@@ -46,14 +46,14 @@ git clone https://github.com/seu-usuario/kubectx-merge.git
 cd kubectx-merge
 
 # Copiar os scripts para um diretório no PATH
-cp kxmerge kxswap ~/.local/bin/
+cp kxconfig kxswap ~/.local/bin/
 
 # Ou criar symlinks
-ln -s $(pwd)/kxmerge ~/.local/bin/kxmerge
+ln -s $(pwd)/kxconfig ~/.local/bin/kxconfig
 ln -s $(pwd)/kxswap ~/.local/bin/kxswap
 
 # Garantir que são executáveis
-chmod +x ~/.local/bin/kxmerge ~/.local/bin/kxswap
+chmod +x ~/.local/bin/kxconfig ~/.local/bin/kxswap
 ```
 
 ### Método 2: Instalação via Script
@@ -67,19 +67,19 @@ curl -fsSL https://raw.githubusercontent.com/seu-usuario/kubectx-merge/main/inst
 
 ## 📖 Uso
 
-### kxmerge
+### kxconfig
 
 #### Merge de um novo kubeconfig
 
 ```bash
 # Merge interativo (escolhe o projeto)
-kxmerge kubeconfig-dev.yaml
+kxconfig kubeconfig-dev.yaml
 
 # Merge num projeto específico
-kxmerge -p dev kubeconfig-dev.yaml
+kxconfig -p dev kubeconfig-dev.yaml
 
 # Usando a flag -m
-kxmerge -p dev -m kubeconfig-dev.yaml
+kxconfig -p dev -m kubeconfig-dev.yaml
 ```
 
 #### Renomear um contexto
@@ -88,10 +88,10 @@ kxmerge -p dev -m kubeconfig-dev.yaml
 
 ```bash
 # Renomear contexto (escolhe projeto interativamente)
-kxmerge -r old-context-name new-context-name
+kxconfig -r old-context-name new-context-name
 
 # Renomear contexto num projeto específico
-kxmerge -p dev -r old-context-name new-context-name
+kxconfig -p dev -r old-context-name new-context-name
 ```
 
 #### Remover um contexto
@@ -100,23 +100,23 @@ kxmerge -p dev -r old-context-name new-context-name
 
 ```bash
 # Remover contexto (escolhe projeto interativamente)
-kxmerge -d context-to-remove
+kxconfig -d context-to-remove
 
 # Remover contexto num projeto específico
-kxmerge -p dev -d context-to-remove
+kxconfig -p dev -d context-to-remove
 ```
 
 #### Operações combinadas
 
 ```bash
 # Merge + Renomear
-kxmerge -p dev -m kubeconfig-new.yaml -r old-name new-name
+kxconfig -p dev -m kubeconfig-new.yaml -r old-name new-name
 
 # Merge + Remover
-kxmerge -p dev -m kubeconfig-new.yaml -d unwanted-context
+kxconfig -p dev -m kubeconfig-new.yaml -d unwanted-context
 
 # Renomear + Remover
-kxmerge -p dev -r old-name new-name -d unwanted-context
+kxconfig -p dev -r old-name new-name -d unwanted-context
 ```
 
 ### kxswap
@@ -133,7 +133,7 @@ kxswap dev
 
 ## 📁 Estrutura de Ficheiros
 
-O `kxmerge` organiza os kubeconfigs da seguinte forma:
+O `kxconfig` organiza os kubeconfigs da seguinte forma:
 
 ```
 ~/.kube/
@@ -156,22 +156,22 @@ O `kxmerge` organiza os kubeconfigs da seguinte forma:
 kubectl --kubeconfig=novo-cluster.yaml config view --flatten > novo-cluster.yaml
 
 # Adicionar ao projeto dev
-kxmerge -p dev novo-cluster.yaml
+kxconfig -p dev novo-cluster.yaml
 ```
 
 ### Caso 2: Organizar contextos com nomes consistentes
 
 ```bash
 # Renomear contextos para seguir uma convenção
-kxmerge -p dev -r cluster1-context dev-cluster1
-kxmerge -p dev -r cluster2-context dev-cluster2
+kxconfig -p dev -r cluster1-context dev-cluster1
+kxconfig -p dev -r cluster2-context dev-cluster2
 ```
 
 ### Caso 3: Limpar contextos antigos
 
 ```bash
 # Remover contextos que já não são necessários
-kxmerge -p dev -d old-cluster-context
+kxconfig -p dev -d old-cluster-context
 ```
 
 ### Caso 4: Trabalhar com múltiplos projetos
@@ -188,13 +188,13 @@ kubectl get pods
 
 ## ⚠️ Notas Importantes
 
-1. **Backups**: O `kxmerge` cria automaticamente backups em `~/.kube/backups/<projeto>.bak` antes de qualquer alteração. Estes backups são únicos (sobrescrevem o anterior).
+1. **Backups**: O `kxconfig` cria automaticamente backups em `~/.kube/backups/<projeto>.bak` antes de qualquer alteração. Estes backups são únicos (sobrescrevem o anterior).
 
 2. **Validação**: Todos os kubeconfigs são validados antes de serem processados usando `kubectl config view`.
 
 3. **Segurança**: Os ficheiros de kubeconfig contêm credenciais sensíveis. Garante que tens as permissões adequadas configuradas.
 
-4. **Integração com kxswap**: Todas as operações do `kxmerge` são feitas nos ficheiros master (`~/.kube/config-<nome>`). Se o `kxswap` estiver disponível no PATH, o `kxmerge` tentará automaticamente aplicar essas alterações ao kubeconfig ativo (`~/.kube/config`) após concluir as operações.
+4. **Integração com kxswap**: Todas as operações do `kxconfig` são feitas nos ficheiros master (`~/.kube/config-<nome>`). Se o `kxswap` estiver disponível no PATH, o `kxconfig` tentará automaticamente aplicar essas alterações ao kubeconfig ativo (`~/.kube/config`) após concluir as operações.
 
 ## 🐛 Troubleshooting
 
