@@ -46,11 +46,11 @@ git clone https://github.com/nunoarmada/kubectx-config.git
 cd kubectx-config
 
 # Copy scripts to a directory in PATH
-cp kxconfig kxswap ~/.local/bin/
+cp bin/kxconfig bin/kxswap ~/.local/bin/
 
 # Or create symlinks
-ln -s $(pwd)/kxconfig ~/.local/bin/kxconfig
-ln -s $(pwd)/kxswap ~/.local/bin/kxswap
+ln -s $(pwd)/bin/kxconfig ~/.local/bin/kxconfig
+ln -s $(pwd)/bin/kxswap ~/.local/bin/kxswap
 
 # Ensure they are executable
 chmod +x ~/.local/bin/kxconfig ~/.local/bin/kxswap
@@ -66,10 +66,33 @@ The installation script automatically checks:
 
 ```bash
 # Download and execute
-curl -fsSL https://raw.githubusercontent.com/nunoarmada/kubectx-config/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nunoarmada/kubectx-config/main/scripts/install.sh | bash
 ```
 
 **Note**: If your shell is not automatically supported (bash, zsh, fish), you'll need to manually add `~/.local/bin` to your PATH.
+
+## 🗑️ Uninstallation
+
+To uninstall the tools:
+
+```bash
+# Uninstall scripts and configuration (keeps backups and project configs)
+./scripts/uninstall.sh
+
+# Or uninstall everything including data
+./scripts/uninstall.sh --all
+```
+
+**Default behavior** (`--keep-data`):
+- ✅ Removes installed scripts (`kxconfig`, `kxswap`)
+- ✅ Removes completion script
+- ✅ Removes shell configuration entries
+- ✅ **Keeps** backups in `~/.kube/backups/`
+- ✅ **Keeps** project configs (`~/.kube/config-<name>`)
+
+**Full removal** (`--all`):
+- ⚠️ Removes everything including backups and project configs
+- ⚠️ Requires confirmation before proceeding
 
 ## 📖 Usage
 
@@ -134,7 +157,28 @@ kxswap dev
 # 3. kubectl/kubectx will now use this project
 ```
 
-## 📁 File Structure
+## 📁 Project Structure
+
+The repository is organized as follows:
+
+```
+kubectx-config/
+├── bin/                              # Main executable scripts
+│   ├── kxconfig                      # Main kubeconfig management tool
+│   └── kxswap                        # Quick config swap tool
+├── completions/                      # Shell completion scripts
+│   └── kubectx-config-completion.bash
+├── scripts/                          # Installation/uninstallation scripts
+│   ├── install.sh                    # Installation script
+│   └── uninstall.sh                  # Uninstallation script
+├── docs/                             # Documentation
+│   └── CONTRIBUTING.md               # Contribution guidelines
+├── LICENSE                           # License file
+├── README.md                         # This file
+└── release-please-config.json        # Release automation config
+```
+
+## 📁 Kubeconfig File Structure
 
 `kxconfig` organizes kubeconfigs as follows:
 
@@ -332,7 +376,7 @@ kubectl --kubeconfig=~/.kube/config-dev config get-contexts
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for more details on how to contribute.
+Contributions are welcome! Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for more details on how to contribute.
 
 ## 📄 License
 

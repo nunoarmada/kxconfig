@@ -140,14 +140,16 @@ create_install_dir() {
 install_files() {
   local script_dir
   script_dir="$(cd "$(dirname "$0")" && pwd)"
+  local project_root
+  project_root="$(cd "${script_dir}/.." && pwd)"
   
-  log "Installing files from ${script_dir} to ${INSTALL_DIR}..."
+  log "Installing files from ${project_root}/bin to ${INSTALL_DIR}..."
   
   local files=("kxconfig" "kxswap")
   local installed=0
   
   for file in "${files[@]}"; do
-    local source_file="${script_dir}/${file}"
+    local source_file="${project_root}/bin/${file}"
     local dest_file="${INSTALL_DIR}/${file}"
     
     if [ ! -f "${source_file}" ]; then
@@ -175,8 +177,10 @@ install_files() {
 install_completion() {
   local script_dir
   script_dir="$(cd "$(dirname "$0")" && pwd)"
+  local project_root
+  project_root="$(cd "${script_dir}/.." && pwd)"
   
-  local completion_file="${script_dir}/kubectx-config-completion.bash"
+  local completion_file="${project_root}/completions/kubectx-config-completion.bash"
   
   if [ ! -f "${completion_file}" ]; then
     warning "Completion file not found: ${completion_file}"

@@ -28,8 +28,10 @@ jobs:
         with:
           tag_name: ${{ steps.release.outputs.tag_name }}
           files: |
-            kxconfig
-            kxswap
+            bin/kxconfig
+            bin/kxswap
+            scripts/install.sh
+            scripts/uninstall.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
