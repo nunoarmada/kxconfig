@@ -82,6 +82,37 @@ Temos todo o gosto em ouvir as tuas ideias! Para sugerir uma nova funcionalidade
 - **Mensagens**: Em português (PT-PT) para mensagens user-facing
 - **Comentários**: Em português, claros e concisos
 
+#### Convenções de Commits
+
+Este projeto usa [Conventional Commits](https://www.conventionalcommits.org/) para automatizar releases. Por favor, usa o seguinte formato:
+
+```
+<tipo>(<âmbito>): <descrição>
+
+[corpo opcional]
+
+[rodapé opcional]
+```
+
+**Tipos:**
+- `feat`: Nova funcionalidade
+- `fix`: Correção de bug
+- `docs`: Alterações na documentação
+- `style`: Formatação, ponto e vírgula, etc. (não afeta código)
+- `refactor`: Refatoração de código
+- `perf`: Melhorias de performance
+- `test`: Adição ou correção de testes
+- `chore`: Tarefas de manutenção (dependências, build, etc.)
+
+**Exemplos:**
+```
+feat(kxconfig): adiciona suporte para listar projetos
+fix(kxswap): corrige validação de kubeconfig inválido
+docs(readme): atualiza instruções de instalação
+```
+
+**Nota**: Commits que seguem o formato conventional commits geram automaticamente releases e changelogs.
+
 #### Exemplo de Estrutura de Script
 
 ```bash

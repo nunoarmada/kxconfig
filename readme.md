@@ -259,6 +259,10 @@ Este projeto está licenciado sob a Licença MIT - vê o ficheiro [LICENSE](LICE
 
 ## 📝 Changelog
 
+O changelog é gerado automaticamente a partir dos commits que seguem o formato [Conventional Commits](https://www.conventionalcommits.org/). 
+
+Ver os [releases](https://github.com/seu-usuario/kubectx-merge/releases) para o histórico completo de versões.
+
 ### Versão 1.0.0
 - Funcionalidade inicial
 - Suporte para merge, rename e delete de contextos
