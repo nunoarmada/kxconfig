@@ -149,7 +149,7 @@ kxswap dev
 ├── config-staging      # Master for "staging" project
 └── backups/
     ├── dev.bak         # Backup for "dev" project
-    ├── prod.bak         # Backup for "prod" project
+    ├── prod.bak        # Backup for "prod" project
     └── staging.bak     # Backup for "staging" project
 ```
 
