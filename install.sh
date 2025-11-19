@@ -5,6 +5,7 @@ IFS=$'\n\t'
 
 SCRIPT_NAME="$(basename "$0")"
 INSTALL_DIR="${HOME}/.local/bin"
+COMPLETION_DIR="${HOME}/.local/share/kubectx-config"
 
 # Colors for output
 RED='\033[0;31m'
@@ -170,6 +171,57 @@ install_files() {
   success "All files installed successfully"
 }
 
+# Install completion script
+install_completion() {
+  local script_dir
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  
+  local completion_file="${script_dir}/kubectx-config-completion.bash"
+  
+  if [ ! -f "${completion_file}" ]; then
+    warning "Completion file not found: ${completion_file}"
+    return 1
+  fi
+  
+  log "Installing completion script..."
+  
+  # Create completion directory
+  mkdir -p "${COMPLETION_DIR}"
+  
+  # Copy completion file
+  cp "${completion_file}" "${COMPLETION_DIR}/completion.bash"
+  success "Completion script installed to ${COMPLETION_DIR}/completion.bash"
+  
+  # Add to shell RC if not already present
+  if [ -z "${SHELL_RC:-}" ]; then
+    warning "Could not automatically add completion to shell configuration."
+    echo ""
+    echo "Manually add to your shell configuration file:"
+    echo "  source ${COMPLETION_DIR}/completion.bash"
+    return 1
+  fi
+  
+  local completion_line="source ${COMPLETION_DIR}/completion.bash"
+  
+  # Check if it already exists
+  if grep -q "kubectx-config.*completion" "${SHELL_RC}" 2>/dev/null; then
+    success "Completion already configured in ${SHELL_RC}"
+    return 0
+  fi
+  
+  log "Adding completion to ${SHELL_RC}..."
+  
+  # Add comment and line
+  {
+    echo ""
+    echo "# kubectx-config completion - added by install.sh"
+    echo "${completion_line}"
+  } >> "${SHELL_RC}"
+  
+  success "Completion added to ${SHELL_RC}"
+  warning "Run 'source ${SHELL_RC}' or restart the terminal to enable completion."
+}
+
 # Verify installation
 verify_installation() {
   log "Verifying installation..."
@@ -220,6 +272,7 @@ main() {
   # Installation
   create_install_dir
   install_files
+  install_completion
   
   # PATH configuration
   if ! check_path; then
