@@ -240,7 +240,17 @@ choose_project_interactive() {
   done
 
   if [ ${#projects[@]} -eq 0 ]; then
-    # no projects yet
+    # no projects yet - backup current config if it exists
+    local current_config="${BASE_DIR}/config"
+    if [ -f "$current_config" ]; then
+      local initial_backup="${BACKUP_DIR}/config-initial.bak"
+      if [ ! -f "$initial_backup" ]; then
+        log "First time usage detected. Backing up current ~/.kube/config..."
+        cp "$current_config" "$initial_backup"
+        log "Initial config backup created at: $initial_backup"
+      fi
+    fi
+    
     if [ -z "$MERGE_FILE" ] && [ -z "$REPLACE_FILE" ]; then
       err "No projects exist yet (no ~/.kube/config-<name>) and no kubeconfig was provided to create one."
       err "Run again passing a kubeconfig file (e.g., $SCRIPT_NAME path/to/kubeconfig)."
