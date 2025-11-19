@@ -2,7 +2,7 @@
     "packages": {
         ".": {
             "release-type": "simple",
-            "package-name": "kubectx-merge",
+            "package-name": "kubectx-config",
             "extra-files": [
                 "kxconfig",
                 "kxswap"

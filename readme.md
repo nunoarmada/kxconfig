@@ -1,10 +1,10 @@
-# kubectx-merge
+# kubectx-config
 
 Bash tools to manage multiple Kubernetes kubeconfigs organized by project.
 
 ## 📋 Description
 
-`kubectx-merge` is a set of tools that allows you to manage Kubernetes kubeconfigs organized by project, making it easier to work with multiple clusters and environments.
+`kubectx-config` is a set of tools that allows you to manage Kubernetes kubeconfigs organized by project, making it easier to work with multiple clusters and environments.
 
 ### Components
 
@@ -42,8 +42,8 @@ Bash tools to manage multiple Kubernetes kubeconfigs organized by project.
 
 ```bash
 # Clone the repository
-git clone https://github.com/seu-usuario/kubectx-merge.git
-cd kubectx-merge
+git clone https://github.com/nunoarmada/kubectx-config.git
+cd kubectx-config
 
 # Copy scripts to a directory in PATH
 cp kxconfig kxswap ~/.local/bin/
@@ -66,7 +66,7 @@ The installation script automatically checks:
 
 ```bash
 # Download and execute
-curl -fsSL https://raw.githubusercontent.com/seu-usuario/kubectx-merge/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nunoarmada/kubectx-config/main/install.sh | bash
 ```
 
 **Note**: If your shell is not automatically supported (bash, zsh, fish), you'll need to manually add `~/.local/bin` to your PATH.
@@ -267,7 +267,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 The changelog is automatically generated from commits following the [Conventional Commits](https://www.conventionalcommits.org/) format.
 
-See [releases](https://github.com/seu-usuario/kubectx-merge/releases) for the complete version history.
+See [releases](https://github.com/nunoarmada/kubectx-config/releases) for the complete version history.
 
 ### Version 1.0.0
 - Initial functionality

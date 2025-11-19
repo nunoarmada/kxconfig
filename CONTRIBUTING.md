@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for considering contributing to `kubectx-merge`! This document provides guidelines for contributions.
+Thank you for considering contributing to `kubectx-config`! This document provides guidelines for contributions.
 
 ## 📋 How to Contribute
 
@@ -8,7 +8,7 @@ Thank you for considering contributing to `kubectx-merge`! This document provide
 
 If you find a bug, please:
 
-1. Check if the bug hasn't already been reported in [Issues](https://github.com/seu-usuario/kubectx-merge/issues)
+1. Check if the bug hasn't already been reported in [Issues](https://github.com/nunoarmada/kubectx-config/issues)
 2. Create a new issue with:
    - Clear description of the problem
    - Steps to reproduce
@@ -33,8 +33,8 @@ We'd love to hear your ideas! To suggest a new feature:
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/your-username/kubectx-merge.git
-   cd kubectx-merge
+   git clone https://github.com/nunoarmada/kubectx-config.git
+   cd kubectx-config
    ```
 
 #### Development Process

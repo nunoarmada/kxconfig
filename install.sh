@@ -115,7 +115,7 @@ add_to_path() {
   # Add comment and line
   {
     echo ""
-    echo "# kubectx-merge - added by install.sh"
+    echo "# kubectx-config - added by install.sh"
     echo "${path_line}"
   } >> "${SHELL_RC}"
   
@@ -210,7 +210,7 @@ verify_installation() {
 # Main function
 main() {
   echo ""
-  log "=== kubectx-merge Installation ==="
+  log "=== kubectx-config Installation ==="
   echo ""
   
   # Checks
