@@ -56,14 +56,20 @@ ln -s $(pwd)/kxswap ~/.local/bin/kxswap
 chmod +x ~/.local/bin/kxconfig ~/.local/bin/kxswap
 ```
 
-### Método 2: Instalação via Script
+### Método 2: Instalação via Script Automático
+
+O script de instalação verifica automaticamente:
+- ✅ Se `kubectl` está instalado
+- ✅ O tipo de shell (bash, zsh, fish)
+- ✅ Se `~/.local/bin` está no PATH
+- ✅ Adiciona automaticamente ao PATH se necessário
 
 ```bash
 # Fazer download e executar
 curl -fsSL https://raw.githubusercontent.com/seu-usuario/kubectx-merge/main/install.sh | bash
 ```
 
-**Nota**: Garante que `~/.local/bin` (ou outro diretório de tua escolha) está no teu `PATH`.
+**Nota**: Se o teu shell não for suportado automaticamente (bash, zsh, fish), terás de adicionar manualmente `~/.local/bin` ao teu PATH.
 
 ## 📖 Uso
 
