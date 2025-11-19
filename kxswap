@@ -7,39 +7,39 @@ SCRIPT_NAME="$(basename "$0")"
 
 usage() {
   cat <<EOF
-Uso: $SCRIPT_NAME <nome>
+Usage: $SCRIPT_NAME <name>
 
-Descrição:
-  Troca o kubeconfig ativo (~/.kube/config) para o projeto especificado.
-  O ficheiro ~/.kube/config-<nome> será copiado para ~/.kube/config.
+Description:
+  Swaps the active kubeconfig (~/.kube/config) to the specified project.
+  The file ~/.kube/config-<name> will be copied to ~/.kube/config.
 
-Opções:
-  -h, --help    Mostra esta ajuda e sai.
+Options:
+  -h, --help    Show this help and exit.
 
-Exemplos:
+Examples:
   $SCRIPT_NAME dev
   $SCRIPT_NAME prod
 EOF
 }
 
 err() {
-  echo "[$SCRIPT_NAME] ERRO: $*" >&2
+  echo "[$SCRIPT_NAME] ERROR: $*" >&2
 }
 
 if [ $# -eq 0 ]; then
-  err "Nenhum argumento fornecido."
+  err "No argument provided."
   usage
   exit 1
 fi
 
-# Verificar se é pedido help
+# Check if help is requested
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   usage
   exit 0
 fi
 
 if [ $# -gt 1 ]; then
-  err "Demasiados argumentos fornecidos."
+  err "Too many arguments provided."
   usage
   exit 1
 fi
@@ -48,34 +48,34 @@ NAME="$1"
 SRC="$HOME/.kube/config-$NAME"
 DEST="$HOME/.kube/config"
 
-# Validar origem
+# Validate source
 if [ ! -f "$SRC" ]; then
-  err "Ficheiro de origem não existe: $SRC"
-  err "Certifica-te de que o projeto '$NAME' existe (usa kxconfig para criar)."
+  err "Source file does not exist: $SRC"
+  err "Make sure the project '$NAME' exists (use kxconfig to create it)."
   exit 1
 fi
 
-# Validar kubeconfig antes de copiar (se kubectl estiver disponível)
+# Validate kubeconfig before copying (if kubectl is available)
 if command -v kubectl >/dev/null 2>&1; then
   if ! kubectl --kubeconfig="$SRC" config view >/dev/null 2>&1; then
-    err "'$SRC' não parece ser um kubeconfig válido (kubectl não o conseguiu ler)."
+    err "'$SRC' does not appear to be a valid kubeconfig (kubectl could not read it)."
     exit 1
   fi
 fi
 
-# Criar diretório de destino se não existir
+# Create destination directory if it doesn't exist
 mkdir -p "$(dirname "$DEST")"
 
-# Copiar kubeconfig
+# Copy kubeconfig
 if ! cp "$SRC" "$DEST" 2>/dev/null; then
-  err "Falha ao copiar kubeconfig de '$SRC' para '$DEST'."
-  err "Verifica as permissões do diretório ~/.kube/"
+  err "Failed to copy kubeconfig from '$SRC' to '$DEST'."
+  err "Check permissions on the ~/.kube/ directory"
   exit 1
 fi
 
-# Forçar namespace default (silencioso)
+# Force default namespace (silent)
 if command -v kubectl >/dev/null 2>&1; then
   KUBECONFIG="$DEST" kubectl config set-context --current --namespace=default >/dev/null 2>&1 || true
 fi
 
-echo "Config aplicada: $NAME"
+echo "Config applied: $NAME"

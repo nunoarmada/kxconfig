@@ -6,7 +6,7 @@ IFS=$'\n\t'
 SCRIPT_NAME="$(basename "$0")"
 INSTALL_DIR="${HOME}/.local/bin"
 
-# Cores para output
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -29,33 +29,33 @@ error() {
   echo -e "${RED}✗${NC} $*" >&2
 }
 
-# Verificar se kubectl está instalado
+# Check if kubectl is installed
 check_kubectl() {
-  log "A verificar se kubectl está instalado..."
+  log "Checking if kubectl is installed..."
   
   if ! command -v kubectl >/dev/null 2>&1; then
-    error "kubectl não encontrado no PATH."
+    error "kubectl not found in PATH."
     echo ""
-    echo "Por favor, instala o kubectl antes de continuar:"
+    echo "Please install kubectl before continuing:"
     echo "  https://kubernetes.io/docs/tasks/tools/"
     echo ""
-    echo "Ou usa um gestor de pacotes:"
+    echo "Or use a package manager:"
     echo "  macOS:   brew install kubectl"
-    echo "  Linux:   Ver documentação oficial"
+    echo "  Linux:   See official documentation"
     exit 1
   fi
   
   local kubectl_version
-  kubectl_version=$(kubectl version --client --short 2>/dev/null | cut -d' ' -f3 || echo "desconhecida")
-  success "kubectl encontrado (versão: ${kubectl_version})"
+  kubectl_version=$(kubectl version --client --short 2>/dev/null | cut -d' ' -f3 || echo "unknown")
+  success "kubectl found (version: ${kubectl_version})"
 }
 
-# Detetar shell e configurar PATH
+# Detect shell and configure PATH
 detect_shell() {
   local shell_name
   shell_name=$(basename "${SHELL:-/bin/sh}")
   
-  log "Shell detetado: ${shell_name}"
+  log "Shell detected: ${shell_name}"
   
   case "${shell_name}" in
     bash)
@@ -69,78 +69,78 @@ detect_shell() {
       SHELL_RC="${HOME}/.config/fish/config.fish"
       ;;
     *)
-      warning "Shell '${shell_name}' não suportado automaticamente."
-      warning "Terás de adicionar manualmente ${INSTALL_DIR} ao teu PATH."
+      warning "Shell '${shell_name}' not automatically supported."
+      warning "You'll need to manually add ${INSTALL_DIR} to your PATH."
       SHELL_RC=""
       return
       ;;
   esac
   
-  success "Ficheiro de configuração: ${SHELL_RC}"
+  success "Configuration file: ${SHELL_RC}"
 }
 
-# Verificar se o diretório de instalação está no PATH
+# Check if installation directory is in PATH
 check_path() {
-  log "A verificar se ${INSTALL_DIR} está no PATH..."
+  log "Checking if ${INSTALL_DIR} is in PATH..."
   
   if echo "${PATH}" | grep -q "${INSTALL_DIR}"; then
-    success "${INSTALL_DIR} já está no PATH"
+    success "${INSTALL_DIR} is already in PATH"
     return 0
   fi
   
-  warning "${INSTALL_DIR} não está no PATH"
+  warning "${INSTALL_DIR} is not in PATH"
   return 1
 }
 
-# Adicionar ao PATH se necessário
+# Add to PATH if necessary
 add_to_path() {
   if [ -z "${SHELL_RC:-}" ]; then
-    warning "Não foi possível adicionar automaticamente ao PATH."
+    warning "Could not automatically add to PATH."
     echo ""
-    echo "Adiciona manualmente ao teu ficheiro de configuração do shell:"
+    echo "Manually add to your shell configuration file:"
     echo "  export PATH=\"\${HOME}/.local/bin:\${PATH}\""
     return 1
   fi
   
   local path_line="export PATH=\"\${HOME}/.local/bin:\${PATH}\""
   
-  # Verificar se já existe
+  # Check if it already exists
   if grep -q "\.local/bin" "${SHELL_RC}" 2>/dev/null; then
-    success "PATH já configurado em ${SHELL_RC}"
+    success "PATH already configured in ${SHELL_RC}"
     return 0
   fi
   
-  log "A adicionar ${INSTALL_DIR} ao PATH em ${SHELL_RC}..."
+  log "Adding ${INSTALL_DIR} to PATH in ${SHELL_RC}..."
   
-  # Adicionar comentário e linha
+  # Add comment and line
   {
     echo ""
-    echo "# kubectx-merge - adicionado por install.sh"
+    echo "# kubectx-merge - added by install.sh"
     echo "${path_line}"
   } >> "${SHELL_RC}"
   
-  success "PATH atualizado em ${SHELL_RC}"
-  warning "Executa 'source ${SHELL_RC}' ou reinicia o terminal para aplicar as alterações."
+  success "PATH updated in ${SHELL_RC}"
+  warning "Run 'source ${SHELL_RC}' or restart the terminal to apply changes."
 }
 
-# Criar diretório de instalação
+# Create installation directory
 create_install_dir() {
-  log "A criar diretório de instalação: ${INSTALL_DIR}"
+  log "Creating installation directory: ${INSTALL_DIR}"
   
   if [ ! -d "${INSTALL_DIR}" ]; then
     mkdir -p "${INSTALL_DIR}"
-    success "Diretório criado: ${INSTALL_DIR}"
+    success "Directory created: ${INSTALL_DIR}"
   else
-    success "Diretório já existe: ${INSTALL_DIR}"
+    success "Directory already exists: ${INSTALL_DIR}"
   fi
 }
 
-# Instalar ficheiros
+# Install files
 install_files() {
   local script_dir
   script_dir="$(cd "$(dirname "$0")" && pwd)"
   
-  log "A instalar ficheiros de ${script_dir} para ${INSTALL_DIR}..."
+  log "Installing files from ${script_dir} to ${INSTALL_DIR}..."
   
   local files=("kxconfig" "kxswap")
   local installed=0
@@ -150,29 +150,29 @@ install_files() {
     local dest_file="${INSTALL_DIR}/${file}"
     
     if [ ! -f "${source_file}" ]; then
-      error "Ficheiro não encontrado: ${source_file}"
+      error "File not found: ${source_file}"
       continue
     fi
     
-    # Copiar ficheiro
+    # Copy file
     cp "${source_file}" "${dest_file}"
     chmod +x "${dest_file}"
     
-    success "Instalado: ${file}"
+    success "Installed: ${file}"
     installed=$((installed + 1))
   done
   
   if [ ${installed} -eq 0 ]; then
-    error "Nenhum ficheiro foi instalado."
+    error "No files were installed."
     exit 1
   fi
   
-  success "Todos os ficheiros instalados com sucesso"
+  success "All files installed successfully"
 }
 
-# Verificar instalação
+# Verify installation
 verify_installation() {
-  log "A verificar instalação..."
+  log "Verifying installation..."
   
   local files=("kxconfig" "kxswap")
   local all_ok=true
@@ -181,55 +181,55 @@ verify_installation() {
     local file_path="${INSTALL_DIR}/${file}"
     
     if [ -f "${file_path}" ] && [ -x "${file_path}" ]; then
-      success "${file} está instalado e executável"
+      success "${file} is installed and executable"
     else
-      error "${file} não está instalado corretamente"
+      error "${file} is not installed correctly"
       all_ok=false
     fi
   done
   
   if [ "${all_ok}" = true ]; then
     echo ""
-    success "Instalação concluída com sucesso!"
+    success "Installation completed successfully!"
     echo ""
-    echo "Para usar as ferramentas:"
+    echo "To use the tools:"
     echo "  kxconfig --help"
     echo "  kxswap dev"
     echo ""
     
     if ! check_path; then
-      echo "Nota: Podes precisar de reiniciar o terminal ou executar:"
+      echo "Note: You may need to restart the terminal or run:"
       echo "  source ${SHELL_RC:-~/.bashrc}"
     fi
   else
-    error "Instalação incompleta. Verifica os erros acima."
+    error "Installation incomplete. Check the errors above."
     exit 1
   fi
 }
 
-# Função principal
+# Main function
 main() {
   echo ""
-  log "=== Instalação do kubectx-merge ==="
+  log "=== kubectx-merge Installation ==="
   echo ""
   
-  # Verificações
+  # Checks
   check_kubectl
   detect_shell
   
-  # Instalação
+  # Installation
   create_install_dir
   install_files
   
-  # Configuração do PATH
+  # PATH configuration
   if ! check_path; then
     add_to_path
   fi
   
-  # Verificação final
+  # Final verification
   verify_installation
 }
 
-# Executar
+# Execute
 main "$@"
 

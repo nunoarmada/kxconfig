@@ -1,280 +1,280 @@
 # kubectx-merge
 
-Ferramentas em Bash para gerir múltiplos kubeconfigs do Kubernetes de forma organizada por projeto.
+Bash tools to manage multiple Kubernetes kubeconfigs organized by project.
 
-## 📋 Descrição
+## 📋 Description
 
-O `kubectx-merge` é um conjunto de ferramentas que permite gerir kubeconfigs do Kubernetes de forma organizada por projeto, facilitando o trabalho com múltiplos clusters e ambientes.
+`kubectx-merge` is a set of tools that allows you to manage Kubernetes kubeconfigs organized by project, making it easier to work with multiple clusters and environments.
 
-### Componentes
+### Components
 
-- **`kxconfig`**: Ferramenta principal para fazer merge, renomear e remover contextos de kubeconfigs organizados por projeto
-- **`kxswap`**: Ferramenta auxiliar para trocar rapidamente o kubeconfig ativo para um projeto específico
+- **`kxconfig`**: Main tool to merge, rename, and remove contexts from kubeconfigs organized by project
+- **`kxswap`**: Auxiliary tool to quickly swap the active kubeconfig to a specific project
 
-## ✨ Funcionalidades
+## ✨ Features
 
 ### kxconfig
 
-- ✅ **Merge** de novos kubeconfigs num master por projeto (`~/.kube/config-<nome>`)
-- ✅ **Renomear contextos** nos ficheiros master (`~/.kube/config-<nome>`)
-- ✅ **Remover contextos** dos ficheiros master (`~/.kube/config-<nome>`)
-- ✅ **Criar novos projetos** interativamente
-- ✅ **Backup automático** antes de qualquer alteração
-- ✅ **Validação** de kubeconfigs antes de processar
-- ✅ **Deteção de "nada a fazer"** (evita alterações desnecessárias)
-- ✅ **Integração automática** com `kxswap` (se disponível) para aplicar alterações ao config ativo
+- ✅ **Merge** new kubeconfigs into a master per project (`~/.kube/config-<name>`)
+- ✅ **Rename contexts** in master files (`~/.kube/config-<name>`)
+- ✅ **Remove contexts** from master files (`~/.kube/config-<name>`)
+- ✅ **Create new projects** interactively
+- ✅ **Automatic backup** before any changes
+- ✅ **Validation** of kubeconfigs before processing
+- ✅ **"Nothing to do" detection** (avoids unnecessary changes)
+- ✅ **Automatic integration** with `kxswap` (if available) to apply changes to active config
 
 ### kxswap
 
-- ✅ **Troca rápida** do kubeconfig ativo (`~/.kube/config`)
-- ✅ **Validação** do ficheiro de origem
-- ✅ **Configuração automática** do namespace default
+- ✅ **Quick swap** of the active kubeconfig (`~/.kube/config`)
+- ✅ **Validation** of source file
+- ✅ **Automatic configuration** of default namespace
 
-## 📦 Requisitos
+## 📦 Requirements
 
-- `bash` (versão 4.0 ou superior)
-- `kubectl` instalado e no `PATH`
-- Permissões de escrita em `~/.kube/`
+- `bash` (version 4.0 or higher)
+- `kubectl` installed and in `PATH`
+- Write permissions in `~/.kube/`
 
-## 🚀 Instalação
+## 🚀 Installation
 
-### Método 1: Instalação Manual
+### Method 1: Manual Installation
 
 ```bash
-# Clonar o repositório
+# Clone the repository
 git clone https://github.com/seu-usuario/kubectx-merge.git
 cd kubectx-merge
 
-# Copiar os scripts para um diretório no PATH
+# Copy scripts to a directory in PATH
 cp kxconfig kxswap ~/.local/bin/
 
-# Ou criar symlinks
+# Or create symlinks
 ln -s $(pwd)/kxconfig ~/.local/bin/kxconfig
 ln -s $(pwd)/kxswap ~/.local/bin/kxswap
 
-# Garantir que são executáveis
+# Ensure they are executable
 chmod +x ~/.local/bin/kxconfig ~/.local/bin/kxswap
 ```
 
-### Método 2: Instalação via Script Automático
+### Method 2: Automatic Script Installation
 
-O script de instalação verifica automaticamente:
-- ✅ Se `kubectl` está instalado
-- ✅ O tipo de shell (bash, zsh, fish)
-- ✅ Se `~/.local/bin` está no PATH
-- ✅ Adiciona automaticamente ao PATH se necessário
+The installation script automatically checks:
+- ✅ If `kubectl` is installed
+- ✅ Shell type (bash, zsh, fish)
+- ✅ If `~/.local/bin` is in PATH
+- ✅ Automatically adds to PATH if necessary
 
 ```bash
-# Fazer download e executar
+# Download and execute
 curl -fsSL https://raw.githubusercontent.com/seu-usuario/kubectx-merge/main/install.sh | bash
 ```
 
-**Nota**: Se o teu shell não for suportado automaticamente (bash, zsh, fish), terás de adicionar manualmente `~/.local/bin` ao teu PATH.
+**Note**: If your shell is not automatically supported (bash, zsh, fish), you'll need to manually add `~/.local/bin` to your PATH.
 
-## 📖 Uso
+## 📖 Usage
 
 ### kxconfig
 
-#### Merge de um novo kubeconfig
+#### Merge a new kubeconfig
 
 ```bash
-# Merge interativo (escolhe o projeto)
+# Interactive merge (choose project)
 kxconfig kubeconfig-dev.yaml
 
-# Merge num projeto específico
+# Merge into a specific project
 kxconfig -p dev kubeconfig-dev.yaml
 
-# Usando a flag -m
+# Using the -m flag
 kxconfig -p dev -m kubeconfig-dev.yaml
 ```
 
-#### Renomear um contexto
+#### Rename a context
 
-**Nota**: Esta operação renomeia contextos no ficheiro master do projeto (`~/.kube/config-<nome>`), não no `~/.kube/config` ativo.
+**Note**: This operation renames contexts in the project master file (`~/.kube/config-<name>`), not in the active `~/.kube/config`.
 
 ```bash
-# Renomear contexto (escolhe projeto interativamente)
+# Rename context (choose project interactively)
 kxconfig -r old-context-name new-context-name
 
-# Renomear contexto num projeto específico
+# Rename context in a specific project
 kxconfig -p dev -r old-context-name new-context-name
 ```
 
-#### Remover um contexto
+#### Remove a context
 
-**Nota**: Esta operação remove contextos do ficheiro master do projeto (`~/.kube/config-<nome>`), não do `~/.kube/config` ativo.
+**Note**: This operation removes contexts from the project master file (`~/.kube/config-<name>`), not from the active `~/.kube/config`.
 
 ```bash
-# Remover contexto (escolhe projeto interativamente)
+# Remove context (choose project interactively)
 kxconfig -d context-to-remove
 
-# Remover contexto num projeto específico
+# Remove context from a specific project
 kxconfig -p dev -d context-to-remove
 ```
 
-#### Operações combinadas
+#### Combined operations
 
 ```bash
-# Merge + Renomear
+# Merge + Rename
 kxconfig -p dev -m kubeconfig-new.yaml -r old-name new-name
 
-# Merge + Remover
+# Merge + Remove
 kxconfig -p dev -m kubeconfig-new.yaml -d unwanted-context
 
-# Renomear + Remover
+# Rename + Remove
 kxconfig -p dev -r old-name new-name -d unwanted-context
 ```
 
 ### kxswap
 
 ```bash
-# Trocar para um projeto específico
+# Swap to a specific project
 kxswap dev
 
-# Isto irá:
-# 1. Copiar ~/.kube/config-dev para ~/.kube/config
-# 2. Configurar o namespace default
-# 3. kubectl/kubectx passarão a usar este projeto
+# This will:
+# 1. Copy ~/.kube/config-dev to ~/.kube/config
+# 2. Configure the default namespace
+# 3. kubectl/kubectx will now use this project
 ```
 
-## 📁 Estrutura de Ficheiros
+## 📁 File Structure
 
-O `kxconfig` organiza os kubeconfigs da seguinte forma:
+`kxconfig` organizes kubeconfigs as follows:
 
 ```
 ~/.kube/
-├── config              # Kubeconfig ativo (usado por kubectl)
-├── config-dev          # Master do projeto "dev"
-├── config-prod         # Master do projeto "prod"
-├── config-staging      # Master do projeto "staging"
+├── config              # Active kubeconfig (used by kubectl)
+├── config-dev          # Master for "dev" project
+├── config-prod         # Master for "prod" project
+├── config-staging      # Master for "staging" project
 └── backups/
-    ├── dev.bak         # Backup do projeto "dev"
-    ├── prod.bak        # Backup do projeto "prod"
-    └── staging.bak     # Backup do projeto "staging"
+    ├── dev.bak         # Backup for "dev" project
+    ├── prod.bak         # Backup for "prod" project
+    └── staging.bak     # Backup for "staging" project
 ```
 
-## 🔧 Exemplos de Casos de Uso
+## 🔧 Use Case Examples
 
-### Caso 1: Adicionar um novo cluster ao projeto de desenvolvimento
+### Case 1: Add a new cluster to the development project
 
 ```bash
-# Fazer download do kubeconfig do novo cluster
+# Download the new cluster's kubeconfig
 kubectl --kubeconfig=novo-cluster.yaml config view --flatten > novo-cluster.yaml
 
-# Adicionar ao projeto dev
+# Add to dev project
 kxconfig -p dev novo-cluster.yaml
 ```
 
-### Caso 2: Organizar contextos com nomes consistentes
+### Case 2: Organize contexts with consistent names
 
 ```bash
-# Renomear contextos para seguir uma convenção
+# Rename contexts to follow a convention
 kxconfig -p dev -r cluster1-context dev-cluster1
 kxconfig -p dev -r cluster2-context dev-cluster2
 ```
 
-### Caso 3: Limpar contextos antigos
+### Case 3: Clean up old contexts
 
 ```bash
-# Remover contextos que já não são necessários
+# Remove contexts that are no longer needed
 kxconfig -p dev -d old-cluster-context
 ```
 
-### Caso 4: Trabalhar com múltiplos projetos
+### Case 4: Work with multiple projects
 
 ```bash
-# Trabalhar no projeto dev
+# Work on dev project
 kxswap dev
 kubectl get pods
 
-# Trocar para produção
+# Switch to production
 kxswap prod
 kubectl get pods
 ```
 
-## ⚠️ Notas Importantes
+## ⚠️ Important Notes
 
-1. **Backups**: O `kxconfig` cria automaticamente backups em `~/.kube/backups/<projeto>.bak` antes de qualquer alteração. Estes backups são únicos (sobrescrevem o anterior).
+1. **Backups**: `kxconfig` automatically creates backups in `~/.kube/backups/<project>.bak` before any changes. These backups are unique (they overwrite the previous one).
 
-2. **Validação**: Todos os kubeconfigs são validados antes de serem processados usando `kubectl config view`.
+2. **Validation**: All kubeconfigs are validated before processing using `kubectl config view`.
 
-3. **Segurança**: Os ficheiros de kubeconfig contêm credenciais sensíveis. Garante que tens as permissões adequadas configuradas.
+3. **Security**: Kubeconfig files contain sensitive credentials. Make sure you have appropriate permissions configured.
 
-4. **Integração com kxswap**: Todas as operações do `kxconfig` são feitas nos ficheiros master (`~/.kube/config-<nome>`). Se o `kxswap` estiver disponível no PATH, o `kxconfig` tentará automaticamente aplicar essas alterações ao kubeconfig ativo (`~/.kube/config`) após concluir as operações.
+4. **Integration with kxswap**: All `kxconfig` operations are performed on master files (`~/.kube/config-<name>`). If `kxswap` is available in PATH, `kxconfig` will automatically try to apply these changes to the active kubeconfig (`~/.kube/config`) after completing operations.
 
 ## 🐛 Troubleshooting
 
-### Erro: "kubectl não encontrado no PATH"
+### Error: "kubectl not found in PATH"
 
-**Solução**: Instala o `kubectl` e garante que está no teu PATH.
+**Solution**: Install `kubectl` and ensure it's in your PATH.
 
 ```bash
-# Verificar se kubectl está instalado
+# Check if kubectl is installed
 which kubectl
 
-# Se não estiver, instala seguindo a documentação oficial:
+# If not, install following the official documentation:
 # https://kubernetes.io/docs/tasks/tools/
 ```
 
-### Erro: "Ficheiro de origem não existe"
+### Error: "Source file does not exist"
 
-**Solução**: Verifica o caminho do ficheiro e garante que o projeto existe.
+**Solution**: Check the file path and ensure the project exists.
 
 ```bash
-# Listar projetos disponíveis
+# List available projects
 ls ~/.kube/config-*
 
-# Verificar se o ficheiro existe
+# Check if the file exists
 ls -la ~/.kube/config-dev
 ```
 
-### Erro: "kubeconfig parece inválido"
+### Error: "kubeconfig appears invalid"
 
-**Solução**: Valida o kubeconfig manualmente.
+**Solution**: Validate the kubeconfig manually.
 
 ```bash
-# Validar kubeconfig
-kubectl --kubeconfig=teu-kubeconfig.yaml config view
+# Validate kubeconfig
+kubectl --kubeconfig=your-kubeconfig.yaml config view
 
-# Se falhar, o ficheiro pode estar corrompido ou mal formatado
+# If it fails, the file may be corrupted or malformed
 ```
 
-### Os contextos não aparecem após o merge
+### Contexts don't appear after merge
 
-**Solução**: Verifica se os contextos foram realmente adicionados.
+**Solution**: Verify if contexts were actually added.
 
 ```bash
-# Ver contextos no projeto
+# View contexts in the project
 kubectl --kubeconfig=~/.kube/config-dev config get-contexts
 
-# Se necessário, faz merge novamente
+# If needed, merge again
 ```
 
-## 🤝 Contribuir
+## 🤝 Contributing
 
-Contribuições são bem-vindas! Por favor, lê o [CONTRIBUTING.md](CONTRIBUTING.md) para mais detalhes sobre como contribuir.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for more details on how to contribute.
 
-## 📄 Licença
+## 📄 License
 
-Este projeto está licenciado sob a Licença MIT - vê o ficheiro [LICENSE](LICENSE) para mais detalhes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Agradecimentos
+## 🙏 Acknowledgments
 
-- Inspirado nas necessidades de gerir múltiplos clusters Kubernetes
-- Baseado nas melhores práticas de gestão de kubeconfigs
+- Inspired by the needs of managing multiple Kubernetes clusters
+- Based on best practices for kubeconfig management
 
 ## 📝 Changelog
 
-O changelog é gerado automaticamente a partir dos commits que seguem o formato [Conventional Commits](https://www.conventionalcommits.org/). 
+The changelog is automatically generated from commits following the [Conventional Commits](https://www.conventionalcommits.org/) format.
 
-Ver os [releases](https://github.com/seu-usuario/kubectx-merge/releases) para o histórico completo de versões.
+See [releases](https://github.com/seu-usuario/kubectx-merge/releases) for the complete version history.
 
-### Versão 1.0.0
-- Funcionalidade inicial
-- Suporte para merge, rename e delete de contextos
-- Integração com kxswap
-- Backups automáticos
+### Version 1.0.0
+- Initial functionality
+- Support for merge, rename and delete contexts
+- Integration with kxswap
+- Automatic backups
 
 ---
 
-**Desenvolvido com ❤️ para a comunidade Kubernetes**
+**Developed with ❤️ for the Kubernetes community**

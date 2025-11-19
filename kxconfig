@@ -25,61 +25,61 @@ log() {
 }
 
 err() {
-  echo "[$SCRIPT_NAME] ERRO: $*" >&2
+  echo "[$SCRIPT_NAME] ERROR: $*" >&2
 }
 
 usage() {
   cat <<EOF
-Uso: $SCRIPT_NAME [OPÇÕES] [NOVO_KUBECONFIG]
+Usage: $SCRIPT_NAME [OPTIONS] [NEW_KUBECONFIG]
 
-Descrição:
-  Opera sobre um kubeconfig master de projeto:
+Description:
+  Operates on a project master kubeconfig:
 
-    ~/.kube/config-<projeto>
+    ~/.kube/config-<project>
 
-  - Pode fazer merge de um novo kubeconfig (via NOVO_KUBECONFIG ou -m).
-  - Pode renomear um contexto (-r).
-  - Pode remover um contexto (-d).
-  - Pode combinar várias operações.
+  - Can merge a new kubeconfig (via NEW_KUBECONFIG or -m).
+  - Can rename a context (-r).
+  - Can remove a context (-d).
+  - Can combine multiple operations.
 
-  Se não for passado -p/--project:
-    - o script lista os projetos existentes (config-*);
-    - deixa escolher um;
-    - ou criar novo (se houver ficheiro para merge).
+  If -p/--project is not provided:
+    - the script lists existing projects (config-*);
+    - lets you choose one;
+    - or create new (if there's a file to merge).
 
-Opções:
+Options:
   -h, --help
-      Mostra esta ajuda e sai.
+      Show this help and exit.
 
   -p NAME, --project NAME
-      Nome do projeto (usa ~/.kube/config-NAME como master).
-      Se não existir, será questionado se queres criar (quando houver merge).
+      Project name (uses ~/.kube/config-NAME as master).
+      If it doesn't exist, you'll be asked if you want to create it (when there's a merge).
 
   -m FILE, --merge FILE
-      Ficheiro kubeconfig a adicionar (merge) ao master.
-      Em alternativa, podes passar o path como argumento posicional.
+      Kubeconfig file to add (merge) to the master.
+      Alternatively, you can pass the path as a positional argument.
 
   -r OLD NEW, --rename-context OLD NEW
-      Renomeia o contexto OLD para NEW no kubeconfig final.
+      Renames context OLD to NEW in the final kubeconfig.
 
   -d CTX, --delete-context CTX
-      Remove o contexto CTX do kubeconfig final.
+      Removes context CTX from the final kubeconfig.
 
-Notas:
-  - Pelo menos uma das operações -m / NOVO_KUBECONFIG, -r ou -d é obrigatória.
-  - Se o master ainda não existir, é obrigatório ter um ficheiro para merge.
+Notes:
+  - At least one operation -m / NEW_KUBECONFIG, -r or -d is required.
+  - If the master doesn't exist yet, a file for merge is required.
 
-Exemplos:
-  # Só merge (pergunta em que projeto adicionar)
+Examples:
+  # Merge only (asks which project to add to)
   $SCRIPT_NAME kubeconfig-dev.yaml
 
-  # Merge num projeto específico
+  # Merge into a specific project
   $SCRIPT_NAME -p dev kubeconfig-dev.yaml
 
-  # Renomear contexto num master escolhido interativamente
+  # Rename context in a master chosen interactively
   $SCRIPT_NAME -r old-name new-name
 
-  # Merge + rename num projeto específico
+  # Merge + rename in a specific project
   $SCRIPT_NAME -p dev -m kubeconfig-dev.yaml -r old-name new-name
 EOF
 }
@@ -93,7 +93,7 @@ trap cleanup EXIT
 # ---------- parsing de argumentos ----------
 
 if [ $# -eq 0 ]; then
-  err "Nenhuma opção/argumento fornecido."
+  err "No option/argument provided."
   usage
   exit 1
 fi
@@ -106,7 +106,7 @@ while [ $# -gt 0 ]; do
       ;;
     -p|--project)
       if [ $# -lt 2 ]; then
-        err "Opção $1 requer um argumento: NAME."
+        err "Option $1 requires an argument: NAME."
         usage
         exit 1
       fi
@@ -115,12 +115,12 @@ while [ $# -gt 0 ]; do
       ;;
     -m|--merge)
       if [ $# -lt 2 ]; then
-        err "Opção $1 requer um argumento: FILE."
+        err "Option $1 requires an argument: FILE."
         usage
         exit 1
       fi
       if [ -n "$MERGE_FILE" ] || [ -n "$POS_NEW_CONFIG" ]; then
-        err "Já foi especificado um ficheiro de kubeconfig (via -m ou argumento posicional)."
+        err "A kubeconfig file has already been specified (via -m or positional argument)."
         exit 1
       fi
       MERGE_FILE="$2"
@@ -128,7 +128,7 @@ while [ $# -gt 0 ]; do
       ;;
     -r|--rename-context)
       if [ $# -lt 3 ]; then
-        err "Opção $1 requer dois argumentos: OLD NEW."
+        err "Option $1 requires two arguments: OLD NEW."
         usage
         exit 1
       fi
@@ -138,7 +138,7 @@ while [ $# -gt 0 ]; do
       ;;
     -d|--delete-context)
       if [ $# -lt 2 ]; then
-        err "Opção $1 requer um argumento: CTX."
+        err "Option $1 requires an argument: CTX."
         usage
         exit 1
       fi
@@ -146,14 +146,14 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     -*)
-      err "Opção desconhecida: $1"
+      err "Unknown option: $1"
       usage
       exit 1
       ;;
     *)
-      # Primeiro argumento não-flag é o NOVO_KUBECONFIG
+      # First non-flag argument is NEW_KUBECONFIG
       if [ -n "$MERGE_FILE" ] || [ -n "$POS_NEW_CONFIG" ]; then
-        err "Fornecido mais do que um ficheiro kubeconfig."
+        err "More than one kubeconfig file provided."
         usage
         exit 1
       fi
@@ -163,39 +163,39 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Resolver fonte de merge (se existir)
+# Resolve merge source (if exists)
 if [ -n "$POS_NEW_CONFIG" ]; then
   MERGE_FILE="$POS_NEW_CONFIG"
 fi
 
 if [ -z "$MERGE_FILE" ] && [ -z "$RENAME_OLD" ] && [ -z "$DELETE_CONTEXT" ]; then
-  err "É necessário pelo menos uma operação: ficheiro kubeconfig, -r ou -d."
+  err "At least one operation is required: kubeconfig file, -r or -d."
   usage
   exit 1
 fi
 
 if ! command -v kubectl >/dev/null 2>&1; then
-  err "kubectl não encontrado no PATH."
+  err "kubectl not found in PATH."
   exit 1
 fi
 
-# ---------- validar ficheiro de merge, se existir ----------
+# ---------- validate merge file, if exists ----------
 
 if [ -n "$MERGE_FILE" ]; then
   if [ ! -f "$MERGE_FILE" ]; then
-    err "Ficheiro de merge '$MERGE_FILE' não existe."
+    err "Merge file '$MERGE_FILE' does not exist."
     exit 1
   fi
 
   if ! kubectl --kubeconfig="$MERGE_FILE" config view >/dev/null 2>&1; then
-    err "'$MERGE_FILE' não parece ser um kubeconfig válido (kubectl não o conseguiu ler)."
+    err "'$MERGE_FILE' does not appear to be a valid kubeconfig (kubectl could not read it)."
     exit 1
   fi
 
-  log "Novo kubeconfig validado: $MERGE_FILE"
+  log "New kubeconfig validated: $MERGE_FILE"
 fi
 
-# ---------- escolher projeto se não foi passado -p ----------
+# ---------- choose project if -p was not passed ----------
 
 choose_project_interactive() {
   local projects=()
@@ -208,22 +208,22 @@ choose_project_interactive() {
   done
 
   if [ ${#projects[@]} -eq 0 ]; then
-    # sem projetos ainda
+    # no projects yet
     if [ -z "$MERGE_FILE" ]; then
-      err "Ainda não existem projetos (nenhum ~/.kube/config-<nome>) e não foi fornecido kubeconfig para criar um."
-      err "Corre novamente passando um ficheiro kubeconfig (ex.: $SCRIPT_NAME caminho/para/kubeconfig)."
+      err "No projects exist yet (no ~/.kube/config-<name>) and no kubeconfig was provided to create one."
+      err "Run again passing a kubeconfig file (e.g., $SCRIPT_NAME path/to/kubeconfig)."
       exit 1
     fi
-    echo "Ainda não tens nenhum projeto definido."
-    read -rp "Nome para o novo projeto (será criado ~/.kube/config-<nome>): " PROJECT
+    echo "You don't have any projects defined yet."
+    read -rp "Name for the new project (will create ~/.kube/config-<name>): " PROJECT
     if [ -z "$PROJECT" ]; then
-      err "Nome de projeto vazio, a abortar."
+      err "Empty project name, aborting."
       exit 1
     fi
     return
   fi
 
-  echo "Projetos disponíveis:"
+  echo "Available projects:"
   local i=1
   for name in "${projects[@]}"; do
     echo "  $i) $name"
@@ -233,15 +233,15 @@ choose_project_interactive() {
   local create_idx=0
   if [ -n "$MERGE_FILE" ]; then
     create_idx=$i
-    echo "  $create_idx) Criar novo projeto"
+    echo "  $create_idx) Create new project"
   fi
 
   echo
-  read -rp "Escolhe o número do projeto: " choice
+  read -rp "Choose the project number: " choice
 
-  # validar número
+  # validate number
   if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
-    err "Escolha inválida: '$choice' (não é número)."
+    err "Invalid choice: '$choice' (not a number)."
     exit 1
   fi
 
@@ -251,145 +251,145 @@ choose_project_interactive() {
   fi
 
   if [ -n "$MERGE_FILE" ] && [ "$choice" -eq "$create_idx" ]; then
-    read -rp "Nome para o novo projeto: " PROJECT
+    read -rp "Name for the new project: " PROJECT
     if [ -z "$PROJECT" ]; then
-      err "Nome de projeto vazio, a abortar."
+      err "Empty project name, aborting."
       exit 1
     fi
     return
   fi
 
-  err "Número fora de intervalo."
+  err "Number out of range."
   exit 1
 }
 
 if [ -z "$PROJECT" ]; then
-  echo "Nenhum projeto (-p) foi especificado."
+  echo "No project (-p) was specified."
   choose_project_interactive
 fi
 
 KUBE_CONFIG="${BASE_DIR}/config-${PROJECT}"
-log "Projeto selecionado: ${PROJECT}"
-log "Kubeconfig master alvo: ${KUBE_CONFIG}"
+log "Selected project: ${PROJECT}"
+log "Target master kubeconfig: ${KUBE_CONFIG}"
 
-# ---------- se o master não existir ainda ----------
+# ---------- if master doesn't exist yet ----------
 
 if [ ! -f "$KUBE_CONFIG" ]; then
   if [ -z "$MERGE_FILE" ]; then
-    err "Projeto '${PROJECT}' não existe (${KUBE_CONFIG})."
-    err "Só posso criar um novo master se me deres também um kubeconfig para merge."
+    err "Project '${PROJECT}' does not exist (${KUBE_CONFIG})."
+    err "I can only create a new master if you also provide a kubeconfig to merge."
     exit 1
   fi
 
-  echo "Projeto '${PROJECT}' ainda não existe (ficheiro ${KUBE_CONFIG})."
-  read -rp "Queres criar um novo master com base em '${MERGE_FILE}'? [y/N]: " ans
+  echo "Project '${PROJECT}' does not exist yet (file ${KUBE_CONFIG})."
+  read -rp "Do you want to create a new master based on '${MERGE_FILE}'? [y/N]: " ans
   ans="${ans:-N}"
   case "$ans" in
     y|Y)
-      log "A criar novo kubeconfig master em ${KUBE_CONFIG}..."
+      log "Creating new kubeconfig master at ${KUBE_CONFIG}..."
       mkdir -p "$(dirname "$KUBE_CONFIG")"
       cp "$MERGE_FILE" "$KUBE_CONFIG"
       ;;
     *)
-      log "Operação cancelada pelo utilizador."
+      log "Operation cancelled by user."
       exit 1
       ;;
   esac
 
-  # aplicar rename/delete se pedidos
+  # apply rename/delete if requested
   if [ -n "$RENAME_OLD" ]; then
-    log "A renomear contexto '${RENAME_OLD}' para '${RENAME_NEW}' no novo master..."
+    log "Renaming context '${RENAME_OLD}' to '${RENAME_NEW}' in new master..."
     if ! KUBECONFIG="$KUBE_CONFIG" kubectl config rename-context "$RENAME_OLD" "$RENAME_NEW"; then
-      err "Falha ao renomear contexto '${RENAME_OLD}' para '${RENAME_NEW}' em ${KUBE_CONFIG}."
+      err "Failed to rename context '${RENAME_OLD}' to '${RENAME_NEW}' in ${KUBE_CONFIG}."
       exit 1
     fi
   fi
 
   if [ -n "$DELETE_CONTEXT" ]; then
-    log "A remover contexto '${DELETE_CONTEXT}' do novo master..."
+    log "Removing context '${DELETE_CONTEXT}' from new master..."
     if ! KUBECONFIG="$KUBE_CONFIG" kubectl config delete-context "$DELETE_CONTEXT"; then
-      err "Falha ao remover contexto '${DELETE_CONTEXT}' em ${KUBE_CONFIG}."
+      err "Failed to remove context '${DELETE_CONTEXT}' in ${KUBE_CONFIG}."
       exit 1
     fi
   fi
 
-  # criar/atualizar backup único deste projeto
+  # create/update unique backup for this project
   BACKUP="${BACKUP_DIR}/${PROJECT}.bak"
   cp "$KUBE_CONFIG" "$BACKUP"
-  log "Backup único do projeto criado/atualizado em: $BACKUP"
+  log "Project backup created/updated at: $BACKUP"
 
-  log "Novo kubeconfig master criado em: $KUBE_CONFIG"
+  log "New kubeconfig master created at: $KUBE_CONFIG"
 
-  # Forçar atualização do kubeconfig ativo via kxswap (se existir)
+  # Force update of active kubeconfig via kxswap (if exists)
   if command -v kxswap >/dev/null 2>&1; then
-    kxswap "${PROJECT}" || log "Aviso: kxswap falhou ao aplicar configuração ativa."
+    kxswap "${PROJECT}" || log "Warning: kxswap failed to apply active configuration."
   fi
 
   exit 0
 fi
 
-# ---------- já existe master: normalizar e aplicar operações ----------
+# ---------- master already exists: normalize and apply operations ----------
 
 TMP_CURRENT="$(mktemp "${TMPDIR:-/tmp}/kube-current.XXXXXX")"
 TMP_WORK="$(mktemp "${TMPDIR:-/tmp}/kube-work.XXXXXX")"
 
-# Normalizar o config atual
+# Normalize current config
 if ! kubectl --kubeconfig="$KUBE_CONFIG" config view --merge --flatten > "$TMP_CURRENT" 2>/dev/null; then
-  err "O kubeconfig master em '$KUBE_CONFIG' parece inválido (kubectl não o conseguiu ler)."
-  err "Por segurança, nada foi alterado. Corrige o ficheiro atual ou faz backup manualmente e volta a tentar."
+  err "The master kubeconfig at '$KUBE_CONFIG' appears invalid (kubectl could not read it)."
+  err "For safety, nothing was changed. Fix the current file or make a manual backup and try again."
   exit 1
 fi
 
-# Ponto de partida para TMP_WORK:
+# Starting point for TMP_WORK:
 if [ -n "$MERGE_FILE" ]; then
   if ! KUBECONFIG="${KUBE_CONFIG}:${MERGE_FILE}" \
     kubectl config view --merge --flatten > "$TMP_WORK" 2>/dev/null; then
-    err "Falha ao gerar kubeconfig mesclado (kubectl config view falhou)."
+    err "Failed to generate merged kubeconfig (kubectl config view failed)."
     exit 1
   fi
 else
   cp "$TMP_CURRENT" "$TMP_WORK"
 fi
 
-# Aplicar rename/delete sobre TMP_WORK, se pedidos
+# Apply rename/delete on TMP_WORK, if requested
 if [ -n "$RENAME_OLD" ]; then
-  log "A renomear contexto '${RENAME_OLD}' para '${RENAME_NEW}' no config de trabalho..."
+  log "Renaming context '${RENAME_OLD}' to '${RENAME_NEW}' in work config..."
   if ! KUBECONFIG="$TMP_WORK" kubectl config rename-context "$RENAME_OLD" "$RENAME_NEW"; then
-    err "Falha ao renomear contexto '${RENAME_OLD}' para '${RENAME_NEW}' no config de trabalho."
+    err "Failed to rename context '${RENAME_OLD}' to '${RENAME_NEW}' in work config."
     exit 1
   fi
 fi
 
 if [ -n "$DELETE_CONTEXT" ]; then
-  log "A remover contexto '${DELETE_CONTEXT}' no config de trabalho..."
+  log "Removing context '${DELETE_CONTEXT}' in work config..."
   if ! KUBECONFIG="$TMP_WORK" kubectl config delete-context "$DELETE_CONTEXT"; then
-    err "Falha ao remover contexto '${DELETE_CONTEXT}' no config de trabalho."
+    err "Failed to remove context '${DELETE_CONTEXT}' in work config."
     exit 1
   fi
 fi
 
-# Verificar se houve alterações efetivas
+# Check if there were effective changes
 if cmp -s "$TMP_CURRENT" "$TMP_WORK"; then
-  log "Nada a fazer: o kubeconfig master final é igual ao atual."
+  log "Nothing to do: final master kubeconfig is the same as current."
   exit 0
 fi
 
-# Backup único do master atual
+# Unique backup of current master
 BACKUP="${BACKUP_DIR}/${PROJECT}.bak"
 cp "$KUBE_CONFIG" "$BACKUP"
-log "Backup único do projeto criado/atualizado em: $BACKUP"
+log "Project backup created/updated at: $BACKUP"
 
-# Aplicar o novo ficheiro master
+# Apply the new master file
 mv "$TMP_WORK" "$KUBE_CONFIG"
-# TMP_CURRENT é limpo via trap
+# TMP_CURRENT is cleaned via trap
 
-log "Atualização concluída em: $KUBE_CONFIG"
-[ -n "$MERGE_FILE" ] && log "Merge aplicado a partir de: $MERGE_FILE"
-[ -n "$RENAME_OLD" ] && log "Contexto '${RENAME_OLD}' foi renomeado para '${RENAME_NEW}'."
-[ -n "$DELETE_CONTEXT" ] && log "Contexto '${DELETE_CONTEXT}' foi removido do kubeconfig master."
-log "Se algo correr mal, podes restaurar a partir de: $BACKUP"
+log "Update completed at: $KUBE_CONFIG"
+[ -n "$MERGE_FILE" ] && log "Merge applied from: $MERGE_FILE"
+[ -n "$RENAME_OLD" ] && log "Context '${RENAME_OLD}' was renamed to '${RENAME_NEW}'."
+[ -n "$DELETE_CONTEXT" ] && log "Context '${DELETE_CONTEXT}' was removed from master kubeconfig."
+log "If something goes wrong, you can restore from: $BACKUP"
 
-# aplicar via kxswap automaticamente
+# apply via kxswap automatically
 if command -v kxswap >/dev/null 2>&1; then
-  kxswap "${PROJECT}" || log "Aviso: kxswap falhou ao aplicar configuração ativa."
+  kxswap "${PROJECT}" || log "Warning: kxswap failed to apply active configuration."
 fi

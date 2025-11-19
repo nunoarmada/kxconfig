@@ -1,119 +1,119 @@
-# Guia de Contribuição
+# Contributing Guide
 
-Obrigado por considerares contribuir para o `kubectx-merge`! Este documento fornece diretrizes para contribuições.
+Thank you for considering contributing to `kubectx-merge`! This document provides guidelines for contributions.
 
-## 📋 Como Contribuir
+## 📋 How to Contribute
 
-### Reportar Bugs
+### Reporting Bugs
 
-Se encontrares um bug, por favor:
+If you find a bug, please:
 
-1. Verifica se o bug já não foi reportado nas [Issues](https://github.com/seu-usuario/kubectx-merge/issues)
-2. Cria uma nova issue com:
-   - Descrição clara do problema
-   - Passos para reproduzir
-   - Comportamento esperado vs. comportamento atual
-   - Versão do bash e kubectl
-   - Sistema operativo
+1. Check if the bug hasn't already been reported in [Issues](https://github.com/seu-usuario/kubectx-merge/issues)
+2. Create a new issue with:
+   - Clear description of the problem
+   - Steps to reproduce
+   - Expected behavior vs. current behavior
+   - Bash and kubectl version
+   - Operating system
 
-### Sugerir Funcionalidades
+### Suggesting Features
 
-Temos todo o gosto em ouvir as tuas ideias! Para sugerir uma nova funcionalidade:
+We'd love to hear your ideas! To suggest a new feature:
 
-1. Verifica se já não existe uma issue similar
-2. Cria uma nova issue com:
-   - Descrição clara da funcionalidade
-   - Casos de uso e exemplos
-   - Benefícios para os utilizadores
+1. Check if a similar issue doesn't already exist
+2. Create a new issue with:
+   - Clear description of the feature
+   - Use cases and examples
+   - Benefits for users
 
-### Contribuir com Código
+### Contributing Code
 
-#### Setup do Ambiente
+#### Environment Setup
 
-1. Faz fork do repositório
-2. Clona o teu fork:
+1. Fork the repository
+2. Clone your fork:
    ```bash
-   git clone https://github.com/teu-usuario/kubectx-merge.git
+   git clone https://github.com/your-username/kubectx-merge.git
    cd kubectx-merge
    ```
 
-#### Processo de Desenvolvimento
+#### Development Process
 
-1. Cria uma branch para a tua feature/correção:
+1. Create a branch for your feature/fix:
    ```bash
-   git checkout -b feature/minha-feature
-   # ou
-   git checkout -b fix/correcao-bug
+   git checkout -b feature/my-feature
+   # or
+   git checkout -b fix/bug-fix
    ```
 
-2. Faz as alterações necessárias
+2. Make the necessary changes
 
-3. Testa as alterações:
+3. Test your changes:
    ```bash
-   # Testa os scripts manualmente
+   # Test scripts manually
    ./kxconfig --help
    ./kxswap dev
    ```
 
-4. Garante que o código segue as convenções:
-   - Usa `set -euo pipefail` nos scripts bash
-   - Mantém mensagens de erro claras e informativas
-   - Adiciona comentários quando necessário
-   - Segue o estilo de código existente
+4. Ensure the code follows conventions:
+   - Use `set -euo pipefail` in bash scripts
+   - Keep error messages clear and informative
+   - Add comments when necessary
+   - Follow existing code style
 
-5. Faz commit das alterações:
+5. Commit your changes:
    ```bash
    git add .
-   git commit -m "Descrição clara da alteração"
+   git commit -m "Clear description of the change"
    ```
 
-6. Faz push para o teu fork:
+6. Push to your fork:
    ```bash
-   git push origin feature/minha-feature
+   git push origin feature/my-feature
    ```
 
-7. Abre um Pull Request no repositório original
+7. Open a Pull Request in the original repository
 
-#### Convenções de Código
+#### Code Conventions
 
-- **Bash**: Usa `set -euo pipefail` e `IFS=$'\n\t'`
-- **Nomes de variáveis**: UPPERCASE para variáveis globais
-- **Funções**: Nomes descritivos em lowercase com hífens
-- **Mensagens**: Em português (PT-PT) para mensagens user-facing
-- **Comentários**: Em português, claros e concisos
+- **Bash**: Use `set -euo pipefail` and `IFS=$'\n\t'`
+- **Variable names**: UPPERCASE for global variables
+- **Functions**: Descriptive names in lowercase with hyphens
+- **Messages**: In English for user-facing messages
+- **Comments**: In English, clear and concise
 
-#### Convenções de Commits
+#### Commit Conventions
 
-Este projeto usa [Conventional Commits](https://www.conventionalcommits.org/) para automatizar releases. Por favor, usa o seguinte formato:
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) to automate releases. Please use the following format:
 
 ```
-<tipo>(<âmbito>): <descrição>
+<type>(<scope>): <description>
 
-[corpo opcional]
+[optional body]
 
-[rodapé opcional]
+[optional footer]
 ```
 
-**Tipos:**
-- `feat`: Nova funcionalidade
-- `fix`: Correção de bug
-- `docs`: Alterações na documentação
-- `style`: Formatação, ponto e vírgula, etc. (não afeta código)
-- `refactor`: Refatoração de código
-- `perf`: Melhorias de performance
-- `test`: Adição ou correção de testes
-- `chore`: Tarefas de manutenção (dependências, build, etc.)
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Formatting, semicolons, etc. (doesn't affect code)
+- `refactor`: Code refactoring
+- `perf`: Performance improvements
+- `test`: Adding or fixing tests
+- `chore`: Maintenance tasks (dependencies, build, etc.)
 
-**Exemplos:**
+**Examples:**
 ```
-feat(kxconfig): adiciona suporte para listar projetos
-fix(kxswap): corrige validação de kubeconfig inválido
-docs(readme): atualiza instruções de instalação
+feat(kxconfig): add support for listing projects
+fix(kxswap): fix validation of invalid kubeconfig
+docs(readme): update installation instructions
 ```
 
-**Nota**: Commits que seguem o formato conventional commits geram automaticamente releases e changelogs.
+**Note**: Commits following the conventional commits format automatically generate releases and changelogs.
 
-#### Exemplo de Estrutura de Script
+#### Example Script Structure
 
 ```bash
 #!/usr/bin/env bash
@@ -121,56 +121,55 @@ docs(readme): atualiza instruções de instalação
 set -euo pipefail
 IFS=$'\n\t'
 
-# Variáveis globais
+# Global variables
 SCRIPT_NAME="$(basename "$0")"
 BASE_DIR="${HOME}/.kube"
 
-# Funções auxiliares
+# Helper functions
 log() {
   echo "[$SCRIPT_NAME] $*"
 }
 
 err() {
-  echo "[$SCRIPT_NAME] ERRO: $*" >&2
+  echo "[$SCRIPT_NAME] ERROR: $*" >&2
 }
 
-# Função principal
+# Main function
 main() {
-  # código aqui
+  # code here
 }
 
 main "$@"
 ```
 
-### Revisão de Pull Requests
+### Pull Request Review
 
-- Todos os PRs serão revistos
-- Pode ser pedido para fazer alterações antes de fazer merge
-- Mantém os PRs focados numa única alteração quando possível
+- All PRs will be reviewed
+- You may be asked to make changes before merging
+- Keep PRs focused on a single change when possible
 
-## 📝 Checklist para Pull Requests
+## 📝 Pull Request Checklist
 
-Antes de submeteres um PR, garante que:
+Before submitting a PR, ensure that:
 
-- [ ] O código funciona corretamente
-- [ ] Testaste as alterações manualmente
-- [ ] Segues as convenções de código
-- [ ] Adicionaste comentários quando necessário
-- [ ] Atualizaste a documentação se necessário
-- [ ] As mensagens de commit são claras e descritivas
+- [ ] The code works correctly
+- [ ] You tested the changes manually
+- [ ] You follow code conventions
+- [ ] You added comments when necessary
+- [ ] You updated documentation if necessary
+- [ ] Commit messages are clear and descriptive
 
-## 🎯 Áreas onde Precisamos de Ajuda
+## 🎯 Areas Where We Need Help
 
-- Testes automatizados
-- Melhorias na documentação
-- Suporte para mais sistemas operativos
-- Funcionalidades adicionais (ver issues)
+- Automated tests
+- Documentation improvements
+- Support for more operating systems
+- Additional features (see issues)
 
-## 📞 Contacto
+## 📞 Contact
 
-Se tiveres dúvidas, podes:
-- Abrir uma issue
-- Criar uma discussão no GitHub
+If you have questions, you can:
+- Open an issue
+- Create a discussion on GitHub
 
-Obrigado por contribuíres! 🎉
-
+Thank you for contributing! 🎉
