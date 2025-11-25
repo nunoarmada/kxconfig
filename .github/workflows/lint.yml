@@ -1,0 +1,55 @@
+name: Lint
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    lint:
+        name: Lint Scripts
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Install ShellCheck
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y shellcheck
+
+            - name: Run ShellCheck on scripts
+              run: |
+                  echo "Linting all bash scripts with ShellCheck..."
+                  shellcheck bin/kxconfig bin/kxswap scripts/install.sh scripts/uninstall.sh completions/kubectx-config-completion.bash
+                  echo "✓ All scripts passed ShellCheck"
+
+            - name: Check script syntax
+              run: |
+                  echo "Checking syntax of all scripts..."
+                  bash -n bin/kxconfig
+                  bash -n bin/kxswap
+                  bash -n scripts/install.sh
+                  bash -n scripts/uninstall.sh
+                  bash -n completions/kubectx-config-completion.bash
+                  echo "✓ All scripts have valid syntax"
+
+            - name: Verify scripts are executable
+              run: |
+                  test -x bin/kxconfig || (echo "bin/kxconfig is not executable" && exit 1)
+                  test -x bin/kxswap || (echo "bin/kxswap is not executable" && exit 1)
+                  test -x scripts/install.sh || (echo "scripts/install.sh is not executable" && exit 1)
+                  test -x scripts/uninstall.sh || (echo "scripts/uninstall.sh is not executable" && exit 1)
+                  echo "✓ All scripts are executable"
+
+            - name: Verify shebang lines
+              run: |
+                  for script in bin/kxconfig bin/kxswap scripts/install.sh scripts/uninstall.sh; do
+                    if ! head -1 "$script" | grep -q "^#!/usr/bin/env bash\|^#!/bin/bash"; then
+                      echo "Error: $script missing or invalid shebang"
+                      exit 1
+                    fi
+                  done
+                  echo "✓ All scripts have valid shebang"
