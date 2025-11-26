@@ -109,12 +109,9 @@ To uninstall the tools:
 
 ```bash
 # Interactive merge (choose project)
-kxconfig kubeconfig-dev.yaml
+kxconfig -m kubeconfig-dev.yaml
 
 # Merge into a specific project
-kxconfig -p dev kubeconfig-dev.yaml
-
-# Using the -m flag
 kxconfig -p dev -m kubeconfig-dev.yaml
 ```
 
@@ -289,7 +286,7 @@ kxswap dev
 kubectl --kubeconfig=novo-cluster.yaml config view --flatten > novo-cluster.yaml
 
 # Add to dev project
-kxconfig -p dev novo-cluster.yaml
+kxconfig -p dev -m novo-cluster.yaml
 ```
 
 ### Case 2: Replace a project's master kubeconfig

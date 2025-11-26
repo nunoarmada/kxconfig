@@ -15,7 +15,6 @@ TMP_WORK=""
 
 MERGE_FILE=""
 REPLACE_FILE=""
-POS_NEW_CONFIG=""
 DELETE_CONTEXT=""
 PROJECT=""
 REPLACE_MODE=false
@@ -30,14 +29,14 @@ err() {
 
 usage() {
   cat <<EOF
-Usage: $SCRIPT_NAME [OPTIONS] [NEW_KUBECONFIG]
+Usage: $SCRIPT_NAME [OPTIONS]
 
 Description:
   Operates on a project master kubeconfig:
 
     ~/.kube/config-<project>
 
-  - Can merge a new kubeconfig (via NEW_KUBECONFIG or -m).
+  - Can merge a new kubeconfig (via -m).
   - Can replace the master kubeconfig (via -x).
   - Can remove a context (-d).
   - Can combine multiple operations.
@@ -57,7 +56,7 @@ Options:
 
   -m FILE, --merge FILE
       Kubeconfig file to add (merge) to the master.
-      Alternatively, you can pass the path as a positional argument.
+      This option is required for merge operations.
 
   -x FILE, --replace FILE
       Kubeconfig file to replace the master (instead of merging).
@@ -66,16 +65,16 @@ Options:
       Removes context CTX from the final kubeconfig.
 
 Notes:
-  - At least one operation -m / NEW_KUBECONFIG, -x or -d is required.
+  - At least one operation (-m, -x or -d) is required.
   - If the master doesn't exist yet, a file for merge/replace is required.
   - -x and -m are mutually exclusive.
 
 Examples:
   # Merge only (asks which project to add to)
-  $SCRIPT_NAME kubeconfig-dev.yaml
+  $SCRIPT_NAME -m kubeconfig-dev.yaml
 
   # Merge into a specific project
-  $SCRIPT_NAME -p dev kubeconfig-dev.yaml
+  $SCRIPT_NAME -p dev -m kubeconfig-dev.yaml
 
   # Replace master kubeconfig in a specific project
   $SCRIPT_NAME -p dev -x kubeconfig-dev.yaml
@@ -124,8 +123,8 @@ while [ $# -gt 0 ]; do
         usage
         exit 1
       fi
-      if [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ] || [ -n "$POS_NEW_CONFIG" ]; then
-        err "A kubeconfig file has already been specified (via -m, -x or positional argument)."
+      if [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ]; then
+        err "A kubeconfig file has already been specified (via -m or -x)."
         exit 1
       fi
       if [ -n "$REPLACE_FILE" ]; then
@@ -141,8 +140,8 @@ while [ $# -gt 0 ]; do
         usage
         exit 1
       fi
-      if [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ] || [ -n "$POS_NEW_CONFIG" ]; then
-        err "A kubeconfig file has already been specified (via -m, -x or positional argument)."
+      if [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ]; then
+        err "A kubeconfig file has already been specified (via -m or -x)."
         exit 1
       fi
       if [ -n "$MERGE_FILE" ]; then
@@ -168,30 +167,17 @@ while [ $# -gt 0 ]; do
       exit 1
       ;;
     *)
-      # First non-flag argument is NEW_KUBECONFIG
-      if [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ] || [ -n "$POS_NEW_CONFIG" ]; then
-        err "More than one kubeconfig file provided."
-        usage
-        exit 1
-      fi
-      POS_NEW_CONFIG="$1"
-      shift
+      err "Unexpected argument: $1"
+      err "To merge a kubeconfig, use the -m option: $SCRIPT_NAME -m $1"
+      err "To replace a kubeconfig, use the -x option: $SCRIPT_NAME -x $1"
+      usage
+      exit 1
       ;;
   esac
 done
 
-# Resolve merge source (if exists)
-if [ -n "$POS_NEW_CONFIG" ]; then
-  if [ "$REPLACE_MODE" = true ]; then
-    err "Cannot use positional argument with -x option."
-    usage
-    exit 1
-  fi
-  MERGE_FILE="$POS_NEW_CONFIG"
-fi
-
 if [ -z "$MERGE_FILE" ] && [ -z "$REPLACE_FILE" ] && [ -z "$DELETE_CONTEXT" ]; then
-  err "At least one operation is required: kubeconfig file or -d."
+  err "At least one operation is required: -m (merge), -x (replace) or -d (delete context)."
   usage
   exit 1
 fi
@@ -257,7 +243,7 @@ choose_project_interactive() {
     
     if [ -z "$MERGE_FILE" ] && [ -z "$REPLACE_FILE" ]; then
       err "No projects exist yet (no ~/.kube/config-<name>) and no kubeconfig was provided to create one."
-      err "Run again passing a kubeconfig file (e.g., $SCRIPT_NAME path/to/kubeconfig)."
+      err "Run again with -m or -x option (e.g., $SCRIPT_NAME -m path/to/kubeconfig)."
       exit 1
     fi
     echo "You don't have any projects defined yet."
