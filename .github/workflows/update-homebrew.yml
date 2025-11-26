@@ -1,0 +1,168 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: ["release-please"]
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  update-homebrew:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    # Only run if release-please workflow succeeded (if triggered by workflow_run)
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    
+    steps:
+      - name: Checkout kxconfig repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            # Get the latest tag from the repository (when triggered by workflow_run)
+            # Fetch all tags first
+            git fetch --tags
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            
+            if [ -z "${TAG}" ]; then
+              # Try to get tag from release-please output if available
+              # Check if there's a recent release
+              TAG=$(git tag --sort=-creatordate | head -1)
+            fi
+          fi
+          
+          if [ -z "${TAG}" ]; then
+            echo "Error: Could not determine release tag"
+            exit 1
+          fi
+          
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Detected tag: ${TAG}"
+
+      - name: Find valid tag format
+        id: tag_format
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          TAG_FORMATS=(
+            "${TAG}"
+            "kxconfig-${TAG}"
+            "v${TAG#v}"
+          )
+          
+          for FORMAT in "${TAG_FORMATS[@]}"; do
+            URL="https://github.com/nunoarmada/kxconfig/archive/refs/tags/${FORMAT}.tar.gz"
+            HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
+            
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "format=${FORMAT}" >> $GITHUB_OUTPUT
+              echo "url=${URL}" >> $GITHUB_OUTPUT
+              echo "Found valid tag format: ${FORMAT}"
+              break
+            fi
+          done
+          
+          if [ -z "${{ steps.tag_format.outputs.format }}" ]; then
+            echo "Error: Could not find valid tag format for ${TAG}"
+            exit 1
+          fi
+
+      - name: Calculate SHA256
+        id: sha256
+        run: |
+          URL="${{ steps.tag_format.outputs.url }}"
+          SHA256=$(curl -sL "${URL}" | shasum -a 256 | awk '{print $1}')
+          echo "sha256=${SHA256}" >> $GITHUB_OUTPUT
+          echo "SHA256: ${SHA256}"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: nunoarmada/homebrew-kxconfig
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update Homebrew formula
+        working-directory: homebrew-tap
+        run: |
+          FORMULA_FILE="Formula/kxconfig.rb"
+          
+          if [ ! -f "${FORMULA_FILE}" ]; then
+            echo "Error: Formula file not found: ${FORMULA_FILE}"
+            exit 1
+          fi
+          
+          URL="${{ steps.tag_format.outputs.url }}"
+          SHA256="${{ steps.sha256.outputs.sha256 }}"
+          
+          # Update URL
+          sed -i "s|url \".*\"|url \"${URL}\"|" "${FORMULA_FILE}"
+          
+          # Update SHA256
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "${FORMULA_FILE}"
+          
+          echo "Updated ${FORMULA_FILE}:"
+          echo "  URL: ${URL}"
+          echo "  SHA256: ${SHA256}"
+
+      - name: Check for changes
+        id: changes
+        working-directory: homebrew-tap
+        run: |
+          if git diff --quiet Formula/kxconfig.rb; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No changes detected in formula"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in formula"
+            git diff Formula/kxconfig.rb
+          fi
+
+      - name: Commit and push changes
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: homebrew-tap
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          git add Formula/kxconfig.rb
+          git commit -m "Update kxconfig to ${TAG}"
+          git push origin main
+          echo "✓ Successfully updated Homebrew formula to ${TAG}"
+
+      - name: Create summary
+        if: always()
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          if [ "${{ steps.changes.outputs.changed }}" == "true" ]; then
+            echo "## ✅ Homebrew Formula Updated" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Successfully updated Homebrew formula to version **${TAG}**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Tag: \`${TAG}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- URL: \`${{ steps.tag_format.outputs.url }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- SHA256: \`${{ steps.sha256.outputs.sha256 }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ℹ️ No Changes Needed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Homebrew formula is already up to date with version **${TAG}**" >> $GITHUB_STEP_SUMMARY
+          fi
+

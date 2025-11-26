@@ -38,7 +38,31 @@ Bash tools to manage multiple Kubernetes kubeconfigs organized by project.
 
 ## 🚀 Installation
 
-### Method 1: Manual Installation
+### Method 1: Homebrew (macOS/Linux) - Recommended
+
+```bash
+# Install via Homebrew tap
+brew install nunoarmada/kxconfig/kxconfig
+```
+
+**Note**: This requires a Homebrew tap to be set up. See [docs/HOMEBREW.md](docs/HOMEBREW.md) for setup instructions.
+
+### Method 2: Automatic Script Installation
+
+The installation script automatically checks:
+- ✅ If `kubectl` is installed
+- ✅ Shell type (bash, zsh, fish)
+- ✅ If `~/.local/bin` is in PATH
+- ✅ Automatically adds to PATH if necessary
+
+```bash
+# Download and execute
+curl -fsSL https://raw.githubusercontent.com/nunoarmada/kxconfig/main/scripts/install.sh | bash
+```
+
+**Note**: If your shell is not automatically supported (bash, zsh, fish), you'll need to manually add `~/.local/bin` to your PATH.
+
+### Method 3: Manual Installation
 
 ```bash
 # Clone the repository
@@ -55,21 +79,6 @@ ln -s $(pwd)/bin/kxswap ~/.local/bin/kxswap
 # Ensure they are executable
 chmod +x ~/.local/bin/kxconfig ~/.local/bin/kxswap
 ```
-
-### Method 2: Automatic Script Installation
-
-The installation script automatically checks:
-- ✅ If `kubectl` is installed
-- ✅ Shell type (bash, zsh, fish)
-- ✅ If `~/.local/bin` is in PATH
-- ✅ Automatically adds to PATH if necessary
-
-```bash
-# Download and execute
-curl -fsSL https://raw.githubusercontent.com/nunoarmada/kxconfig/main/scripts/install.sh | bash
-```
-
-**Note**: If your shell is not automatically supported (bash, zsh, fish), you'll need to manually add `~/.local/bin` to your PATH.
 
 ## 🗑️ Uninstallation
 
