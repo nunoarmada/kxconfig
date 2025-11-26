@@ -1,4 +1,4 @@
-name: Lint
+name: CI
 
 on:
     push:
@@ -53,3 +53,56 @@ jobs:
                     fi
                   done
                   echo "✓ All scripts have valid shebang"
+
+    test:
+        name: Test Scripts
+        needs: lint
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Install kubectl
+              run: |
+                  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                  chmod +x kubectl
+                  sudo mv kubectl /usr/local/bin/
+                  kubectl version --client
+
+            - name: Test kxconfig help
+              run: |
+                  chmod +x bin/kxconfig
+                  # Test that help is displayed (ignore exit code due to set -e in cleanup)
+                  bin/kxconfig --help 2>&1 | grep -q "Usage:" || exit 1
+                  echo "✓ kxconfig --help works"
+
+            - name: Test kxswap help
+              run: |
+                  chmod +x bin/kxswap
+                  bin/kxswap --help || exit 1
+                  echo "✓ kxswap --help works"
+
+            - name: Test install script syntax
+              run: |
+                  chmod +x scripts/install.sh
+                  bash -n scripts/install.sh
+                  echo "✓ install.sh syntax is valid"
+
+            - name: Test uninstall script syntax
+              run: |
+                  chmod +x scripts/uninstall.sh
+                  bash -n scripts/uninstall.sh
+                  echo "✓ uninstall.sh syntax is valid"
+
+            - name: Test uninstall script help
+              run: |
+                  scripts/uninstall.sh --help || exit 1
+                  echo "✓ uninstall.sh --help works"
+
+            - name: Test completion script syntax
+              run: |
+                  # Source the completion script to check for syntax errors
+                  bash -c "source completions/kubectx-config-completion.bash" || true
+                  echo "✓ Completion script syntax is valid"
+

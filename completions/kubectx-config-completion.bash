@@ -78,7 +78,7 @@ _kxconfig_complete() {
       # shellcheck disable=SC2207
       COMPREPLY=($(compgen -W "$commands" -- "$cur"))
     elif [ -n "${ZSH_VERSION:-}" ]; then
-      # shellcheck disable=SC2086,SC2206
+      # shellcheck disable=SC2086,SC2206,SC2034
       local cmd_array=(${=commands})
       compadd -a cmd_array
     fi

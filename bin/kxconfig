@@ -86,8 +86,8 @@ EOF
 }
 
 cleanup() {
-  [ -n "${TMP_CURRENT}" ] && [ -f "${TMP_CURRENT}" ] && rm -f "${TMP_CURRENT}"
-  [ -n "${TMP_WORK}" ] && [ -f "${TMP_WORK}" ] && rm -f "${TMP_WORK}"
+  [ -n "${TMP_CURRENT}" ] && [ -f "${TMP_CURRENT}" ] && rm -f "${TMP_CURRENT}" || true
+  [ -n "${TMP_WORK}" ] && [ -f "${TMP_WORK}" ] && rm -f "${TMP_WORK}" || true
 }
 trap cleanup EXIT
 

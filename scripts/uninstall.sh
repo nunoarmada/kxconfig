@@ -129,7 +129,9 @@ remove_completion() {
   # Remove directory if empty
   if [ -d "${COMPLETION_DIR}" ]; then
     if [ -z "$(ls -A "${COMPLETION_DIR}")" ]; then
-      rmdir "${COMPLETION_DIR}" 2>/dev/null && success "Removed completion directory" || true
+      if rmdir "${COMPLETION_DIR}" 2>/dev/null; then
+        success "Removed completion directory"
+      fi
     fi
   fi
 }
@@ -219,7 +221,9 @@ remove_all_data() {
     
     # Remove backup directory if empty
     if [ -z "$(ls -A "${BACKUP_DIR}")" ]; then
-      rmdir "${BACKUP_DIR}" 2>/dev/null && success "Removed backup directory" || true
+      if rmdir "${BACKUP_DIR}" 2>/dev/null; then
+        success "Removed backup directory"
+      fi
     fi
   fi
   
