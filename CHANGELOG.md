@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.4.1...kxconfig-v1.4.2) (2025-11-26)
+
+
+### Bug Fixes
+
+* Redirect terminal output to /dev/tty in kxswap script ([22c849f](https://github.com/nunoarmada/kxconfig/commit/22c849fdce7f2825b5858e0f85e35b1b1e5b3260))
+
 ## [1.4.1](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.4.0...kxconfig-v1.4.1) (2025-11-26)
 
 
