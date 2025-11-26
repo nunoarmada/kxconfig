@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.4.0...kxconfig-v1.4.1) (2025-11-26)
+
+
+### Bug Fixes
+
+* Improve tag retrieval in Homebrew update workflow ([d23daf6](https://github.com/nunoarmada/kxconfig/commit/d23daf6db273493243747c99b7f75284be1f860f))
+
 ## [1.4.0](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.3.0...kxconfig-v1.4.0) (2025-11-26)
 
 
