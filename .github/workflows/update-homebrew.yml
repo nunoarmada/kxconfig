@@ -33,17 +33,21 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             TAG="${{ github.event.release.tag_name }}"
+            echo "Using tag from release event: ${TAG}"
           else
             # Get the latest tag from the repository (when triggered by workflow_run)
             # Fetch all tags first
-            git fetch --tags
-            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            git fetch --tags --force
+            # Get the most recent tag
+            TAG=$(git tag --sort=-creatordate | head -1)
             
             if [ -z "${TAG}" ]; then
-              # Try to get tag from release-please output if available
-              # Check if there's a recent release
-              TAG=$(git tag --sort=-creatordate | head -1)
+              echo "Error: Could not determine release tag from repository"
+              echo "Available tags:"
+              git tag -l || echo "No tags found"
+              exit 1
             fi
+            echo "Using latest tag from repository: ${TAG}"
           fi
           
           if [ -z "${TAG}" ]; then
@@ -64,11 +68,16 @@ jobs:
             "v${TAG#v}"
           )
           
+          FOUND_FORMAT=""
+          FOUND_URL=""
+          
           for FORMAT in "${TAG_FORMATS[@]}"; do
             URL="https://github.com/nunoarmada/kxconfig/archive/refs/tags/${FORMAT}.tar.gz"
             HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
             
             if [ "${HTTP_CODE}" = "200" ]; then
+              FOUND_FORMAT="${FORMAT}"
+              FOUND_URL="${URL}"
               echo "format=${FORMAT}" >> $GITHUB_OUTPUT
               echo "url=${URL}" >> $GITHUB_OUTPUT
               echo "Found valid tag format: ${FORMAT}"
@@ -76,8 +85,9 @@ jobs:
             fi
           done
           
-          if [ -z "${{ steps.tag_format.outputs.format }}" ]; then
+          if [ -z "${FOUND_FORMAT}" ]; then
             echo "Error: Could not find valid tag format for ${TAG}"
+            echo "Tried formats: ${TAG_FORMATS[*]}"
             exit 1
           fi
 
