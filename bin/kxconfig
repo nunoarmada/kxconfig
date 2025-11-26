@@ -17,7 +17,6 @@ MERGE_FILE=""
 REPLACE_FILE=""
 DELETE_CONTEXT=""
 PROJECT=""
-REPLACE_MODE=false
 
 log() {
   echo "[$SCRIPT_NAME] $*"
@@ -149,7 +148,6 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       REPLACE_FILE="$2"
-      REPLACE_MODE=true
       shift 2
       ;;
     -d|--delete-context)
