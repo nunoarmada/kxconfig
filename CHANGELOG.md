@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.4.2...kxconfig-v1.5.0) (2025-11-26)
+
+
+### Features
+
+* Add project name validation and sorting in kxconfig and kxswap scripts ([8362077](https://github.com/nunoarmada/kxconfig/commit/8362077820422ae1ad85c514547cc5232de47975))
+
 ## [1.4.2](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.4.1...kxconfig-v1.4.2) (2025-11-26)
 
 
