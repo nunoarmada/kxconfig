@@ -23,7 +23,7 @@ jobs:
             - name: Run ShellCheck on scripts
               run: |
                   echo "Linting all bash scripts with ShellCheck..."
-                  shellcheck bin/kxconfig bin/kxswap scripts/install.sh scripts/uninstall.sh completions/kubectx-config-completion.bash
+                  shellcheck bin/kxconfig bin/kxswap scripts/install.sh scripts/uninstall.sh completions/kxconfig-completion.bash
                   echo "✓ All scripts passed ShellCheck"
 
             - name: Check script syntax
@@ -33,7 +33,7 @@ jobs:
                   bash -n bin/kxswap
                   bash -n scripts/install.sh
                   bash -n scripts/uninstall.sh
-                  bash -n completions/kubectx-config-completion.bash
+                  bash -n completions/kxconfig-completion.bash
                   echo "✓ All scripts have valid syntax"
 
             - name: Verify scripts are executable
@@ -103,6 +103,6 @@ jobs:
             - name: Test completion script syntax
               run: |
                   # Source the completion script to check for syntax errors
-                  bash -c "source completions/kubectx-config-completion.bash" || true
+                  bash -c "source completions/kxconfig-completion.bash" || true
                   echo "✓ Completion script syntax is valid"
 

@@ -5,7 +5,7 @@ IFS=$'\n\t'
 
 SCRIPT_NAME="$(basename "$0")"
 INSTALL_DIR="${HOME}/.local/bin"
-COMPLETION_DIR="${HOME}/.local/share/kubectx-config"
+COMPLETION_DIR="${HOME}/.local/share/kxconfig"
 BASE_DIR="${HOME}/.kube"
 BACKUP_DIR="${BASE_DIR}/backups"
 
@@ -37,7 +37,7 @@ usage() {
 Usage: $SCRIPT_NAME [OPTIONS]
 
 Description:
-  Uninstalls kubectx-config tools and optionally removes all data.
+  Uninstalls kxconfig tools and optionally removes all data.
 
 Options:
   -h, --help
@@ -142,7 +142,7 @@ remove_shell_config() {
     warning "Could not automatically remove shell configuration."
     echo ""
     echo "Manually remove from your shell configuration file:"
-    echo "  - Lines containing 'kubectx-config'"
+    echo "  - Lines containing 'kxconfig'"
     echo "  - Lines containing '${COMPLETION_DIR}/completion.bash'"
     echo "  - Lines containing '${INSTALL_DIR}' in PATH (if added by install.sh)"
     return 1
@@ -159,13 +159,13 @@ remove_shell_config() {
   local temp_file
   temp_file=$(mktemp)
   
-  # Remove lines containing kubectx-config
-  if grep -q "kubectx-config" "${SHELL_RC}" 2>/dev/null; then
-    grep -v "kubectx-config" "${SHELL_RC}" > "${temp_file}" || true
+  # Remove lines containing kxconfig
+  if grep -q "kxconfig" "${SHELL_RC}" 2>/dev/null; then
+    grep -v "kxconfig" "${SHELL_RC}" > "${temp_file}" || true
     mv "${temp_file}" "${SHELL_RC}"
-    success "Removed kubectx-config configuration from ${SHELL_RC}"
+    success "Removed kxconfig configuration from ${SHELL_RC}"
   else
-    warning "No kubectx-config configuration found in ${SHELL_RC}"
+    warning "No kxconfig configuration found in ${SHELL_RC}"
     rm -f "${temp_file}"
   fi
 }
@@ -181,7 +181,7 @@ remove_path_entry() {
   fi
   
   # Check if PATH line was added by install.sh
-  if grep -q "# kubectx-config.*added by install.sh" "${SHELL_RC}" 2>/dev/null; then
+  if grep -q "# kxconfig.*added by install.sh" "${SHELL_RC}" 2>/dev/null; then
     log "Removing PATH entry from ${SHELL_RC}..."
     
     local temp_file
@@ -189,7 +189,7 @@ remove_path_entry() {
     
     # Remove the PATH line and the comment above it
     awk '
-      /# kubectx-config.*added by install.sh/ { skip=1; next }
+      /# kxconfig.*added by install.sh/ { skip=1; next }
       skip && /export PATH.*\.local\/bin/ { skip=0; next }
       { print }
     ' "${SHELL_RC}" > "${temp_file}" || true
@@ -274,7 +274,7 @@ main() {
   done
   
   echo ""
-  log "=== kubectx-config Uninstallation ==="
+  log "=== kxconfig Uninstallation ==="
   echo ""
   
   if [ "$remove_all" = true ]; then

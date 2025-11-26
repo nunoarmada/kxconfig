@@ -5,7 +5,7 @@ IFS=$'\n\t'
 
 SCRIPT_NAME="$(basename "$0")"
 INSTALL_DIR="${HOME}/.local/bin"
-COMPLETION_DIR="${HOME}/.local/share/kubectx-config"
+COMPLETION_DIR="${HOME}/.local/share/kxconfig"
 
 # Colors for output
 RED='\033[0;31m'
@@ -116,7 +116,7 @@ add_to_path() {
   # Add comment and line
   {
     echo ""
-    echo "# kubectx-config - added by install.sh"
+    echo "# kxconfig - added by install.sh"
     echo "${path_line}"
   } >> "${SHELL_RC}"
   
@@ -180,7 +180,7 @@ install_completion() {
   local project_root
   project_root="$(cd "${script_dir}/.." && pwd)"
   
-  local completion_file="${project_root}/completions/kubectx-config-completion.bash"
+  local completion_file="${project_root}/completions/kxconfig-completion.bash"
   
   if [ ! -f "${completion_file}" ]; then
     warning "Completion file not found: ${completion_file}"
@@ -208,7 +208,7 @@ install_completion() {
   local completion_line="source ${COMPLETION_DIR}/completion.bash"
   
   # Check if it already exists
-  if grep -q "kubectx-config.*completion" "${SHELL_RC}" 2>/dev/null; then
+  if grep -q "kxconfig.*completion" "${SHELL_RC}" 2>/dev/null; then
     success "Completion already configured in ${SHELL_RC}"
     return 0
   fi
@@ -218,7 +218,7 @@ install_completion() {
   # Add comment and line
   {
     echo ""
-    echo "# kubectx-config completion - added by install.sh"
+    echo "# kxconfig completion - added by install.sh"
     echo "${completion_line}"
   } >> "${SHELL_RC}"
   
@@ -266,7 +266,7 @@ verify_installation() {
 # Main function
 main() {
   echo ""
-  log "=== kubectx-config Installation ==="
+  log "=== kxconfig Installation ==="
   echo ""
   
   # Checks
