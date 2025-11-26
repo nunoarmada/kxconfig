@@ -4,14 +4,18 @@ set -euo pipefail
 IFS=$'\n\t'
 
 SCRIPT_NAME="$(basename "$0")"
+BASE_DIR="${HOME}/.kube"
 
 usage() {
   cat <<EOF
-Usage: $SCRIPT_NAME <name>
+Usage: $SCRIPT_NAME [<name>]
 
 Description:
   Swaps the active kubeconfig (~/.kube/config) to the specified project.
   The file ~/.kube/config-<name> will be copied to ~/.kube/config.
+
+  If no argument is provided, an interactive menu will be shown to select
+  from available projects.
 
 Options:
   -h, --help    Show this help and exit.
@@ -19,6 +23,7 @@ Options:
 Examples:
   $SCRIPT_NAME dev
   $SCRIPT_NAME prod
+  $SCRIPT_NAME              # Interactive selection
 EOF
 }
 
@@ -26,25 +31,117 @@ err() {
   echo "[$SCRIPT_NAME] ERROR: $*" >&2
 }
 
-if [ $# -eq 0 ]; then
-  err "No argument provided."
-  usage
-  exit 1
-fi
+# Interactive menu with arrow keys
+interactive_select() {
+  local projects=()
+  local f name
+  
+  # Collect projects
+  for f in "${BASE_DIR}"/config-*; do
+    [ -f "$f" ] || continue
+    name="${f##*/config-}"
+    projects+=("$name")
+  done
+  
+  if [ ${#projects[@]} -eq 0 ]; then
+    err "No projects found in ${BASE_DIR}/config-*"
+    err "Use kxconfig to create a project first."
+    exit 1
+  fi
+  
+  local selected=0
+  local key
+  local restore_terminal=false
+  
+  # Cleanup function to restore terminal
+  cleanup_terminal() {
+    if [ "$restore_terminal" = true ]; then
+      tput cnorm  # Show cursor
+      tput ed     # Clear to end of screen
+    fi
+  }
+  
+  # Hide cursor
+  tput civis
+  restore_terminal=true
+  trap cleanup_terminal EXIT INT TERM
+  
+  while true; do
+    # Clear screen and move to top
+    tput clear
+    tput cup 0 0
+    
+    echo "Select a project (use ↑↓ arrows, Enter to select, Ctrl+C to cancel):"
+    echo ""
+    
+    # Display projects with selection indicator
+    local i=0
+    for name in "${projects[@]}"; do
+      if [ $i -eq $selected ]; then
+        tput rev  # Reverse video for selected
+        echo "  > $name"
+        tput sgr0  # Reset formatting
+      else
+        echo "    $name"
+      fi
+      i=$((i + 1))
+    done
+    
+    # Read keypress
+    IFS= read -rsn1 key
+    
+    # Check for escape sequence (arrow keys)
+    if [ "$key" = $'\x1b' ]; then
+      read -rsn1 -t 0.1 key 2>/dev/null || key=""
+      if [ "$key" = '[' ]; then
+        read -rsn1 -t 0.1 key 2>/dev/null || key=""
+        case "$key" in
+          'A') # Up arrow
+            if [ $selected -gt 0 ]; then
+              selected=$((selected - 1))
+            fi
+            ;;
+          'B') # Down arrow
+            if [ $selected -lt $((${#projects[@]} - 1)) ]; then
+              selected=$((selected + 1))
+            fi
+            ;;
+        esac
+      fi
+    elif [ "$key" = "" ]; then
+      # Enter key (empty string when Enter is pressed)
+      break
+    elif [ "$key" = $'\x03' ]; then
+      # Ctrl+C
+      cleanup_terminal
+      exit 1
+    fi
+  done
+  
+  # Restore terminal
+  cleanup_terminal
+  trap - EXIT INT TERM
+  
+  # Return selected project
+  echo "${projects[$selected]}"
+}
 
 # Check if help is requested
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+if [ $# -gt 0 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
   usage
   exit 0
 fi
 
-if [ $# -gt 1 ]; then
+# If no arguments, use interactive selection
+if [ $# -eq 0 ]; then
+  NAME=$(interactive_select)
+elif [ $# -gt 1 ]; then
   err "Too many arguments provided."
   usage
   exit 1
+else
+  NAME="$1"
 fi
-
-NAME="$1"
 SRC="$HOME/.kube/config-$NAME"
 DEST="$HOME/.kube/config"
 
