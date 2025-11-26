@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/nunoarmada/kubectx-config/compare/kubectx-config-v1.1.0...kubectx-config-v1.2.0) (2025-11-26)
+
+
+### Features
+
+* Add contributing guide and CI workflows for linting and testing ([f88fd02](https://github.com/nunoarmada/kubectx-config/commit/f88fd028aab00425f08d8d9c53d47c79636e6aef))
+* Implement CI workflows for linting and testing scripts ([f81462f](https://github.com/nunoarmada/kubectx-config/commit/f81462fd60d8ce356292dd37032263fecff6500b))
+
 ## [1.1.0](https://github.com/nunoarmada/kubectx-config/compare/kubectx-config-v1.0.0...kubectx-config-v1.1.0) (2025-11-19)
 
 
