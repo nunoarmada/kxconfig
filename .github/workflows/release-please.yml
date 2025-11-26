@@ -37,6 +37,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.release.outputs.tag_name }}
+          draft: false
+          prerelease: false
           files: |
             bin/kxconfig
             bin/kxswap
@@ -44,4 +46,3 @@ jobs:
             scripts/uninstall.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

@@ -3,6 +3,12 @@ name: Update Homebrew Formula
 on:
   release:
     types: [published]
+  workflow_run:
+    workflows: ["release-please"]
+    types:
+      - completed
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -11,6 +17,10 @@ jobs:
   update-homebrew:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
+    # Only run if release-please workflow succeeded (if triggered by workflow_run)
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     
     steps:
       - name: Checkout kxconfig repository
@@ -18,18 +28,42 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Wait for release to be available
+        if: github.event_name == 'workflow_run'
+        run: |
+          echo "Waiting 15 seconds for release to be fully published..."
+          sleep 15
+
       - name: Determine release tag
         id: tag
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event_name }}" == "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            echo "Using tag from release event: ${TAG}"
+          else
+            # When triggered by workflow_run, get the latest release tag
+            # Fetch all tags first
+            git fetch --tags --force
+            
+            # Get the most recent tag (should be the one just created by release-please)
+            TAG=$(git tag --sort=-creatordate | head -1)
+            
+            if [ -z "${TAG}" ]; then
+              echo "Error: Could not determine release tag from repository"
+              echo "Available tags:"
+              git tag -l || echo "No tags found"
+              exit 1
+            fi
+            echo "Using latest tag from repository: ${TAG}"
+          fi
           
           if [ -z "${TAG}" ]; then
-            echo "Error: Could not get tag from release event"
+            echo "Error: Could not determine release tag"
             exit 1
           fi
           
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Detected tag from release: ${TAG}"
+          echo "Detected tag: ${TAG}"
 
       - name: Find valid tag format
         id: tag_format
