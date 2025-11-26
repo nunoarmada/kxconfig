@@ -45,8 +45,6 @@ Bash tools to manage multiple Kubernetes kubeconfigs organized by project.
 brew install nunoarmada/kxconfig/kxconfig
 ```
 
-**Note**: This requires a Homebrew tap to be set up. See [docs/HOMEBREW.md](docs/HOMEBREW.md) for setup instructions.
-
 ### Method 2: Automatic Script Installation
 
 The installation script automatically checks:
