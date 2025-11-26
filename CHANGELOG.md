@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.3.0...kxconfig-v1.4.0) (2025-11-26)
+
+
+### Features
+
+* Enhance kxswap script with interactive project selection ([606194f](https://github.com/nunoarmada/kxconfig/commit/606194fe286f19b2aa459267ba355e98acca3d2a))
+* Update installation methods and add Homebrew support ([93a9c02](https://github.com/nunoarmada/kxconfig/commit/93a9c02d471b2f499e0ac2d7d27434863451457b))
+
 ## [1.3.0](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.2.0...kxconfig-v1.3.0) (2025-11-26)
 
 
