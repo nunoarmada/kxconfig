@@ -56,8 +56,8 @@ interactive_select() {
   # Cleanup function to restore terminal
   cleanup_terminal() {
     if [ "$restore_terminal" = true ]; then
-      tput cnorm  # Show cursor
-      tput ed     # Clear to end of screen
+      tput cnorm >/dev/tty  # Show cursor
+      tput ed >/dev/tty     # Clear to end of screen
     fi
   }
   
@@ -68,33 +68,33 @@ interactive_select() {
   
   while true; do
     # Clear screen and move to top
-    tput clear
-    tput cup 0 0
+    tput clear >/dev/tty
+    tput cup 0 0 >/dev/tty
     
-    echo "Select a project (use ↑↓ arrows, Enter to select, Ctrl+C to cancel):"
-    echo ""
+    echo "Select a project (use ↑↓ arrows, Enter to select, Ctrl+C to cancel):" >/dev/tty
+    echo "" >/dev/tty
     
     # Display projects with selection indicator
     local i=0
     for name in "${projects[@]}"; do
       if [ $i -eq $selected ]; then
-        tput rev  # Reverse video for selected
-        echo "  > $name"
-        tput sgr0  # Reset formatting
+        tput rev >/dev/tty  # Reverse video for selected
+        echo "  > $name" >/dev/tty
+        tput sgr0 >/dev/tty  # Reset formatting
       else
-        echo "    $name"
+        echo "    $name" >/dev/tty
       fi
       i=$((i + 1))
     done
     
-    # Read keypress
-    IFS= read -rsn1 key
+    # Read keypress from terminal
+    IFS= read -rsn1 key </dev/tty
     
     # Check for escape sequence (arrow keys)
     if [ "$key" = $'\x1b' ]; then
-      read -rsn1 -t 0.1 key 2>/dev/null || key=""
+      read -rsn1 -t 0.1 key </dev/tty 2>/dev/null || key=""
       if [ "$key" = '[' ]; then
-        read -rsn1 -t 0.1 key 2>/dev/null || key=""
+        read -rsn1 -t 0.1 key </dev/tty 2>/dev/null || key=""
         case "$key" in
           'A') # Up arrow
             if [ $selected -gt 0 ]; then
@@ -122,7 +122,7 @@ interactive_select() {
   cleanup_terminal
   trap - EXIT INT TERM
   
-  # Return selected project
+  # Return selected project (only this goes to stdout)
   echo "${projects[$selected]}"
 }
 
