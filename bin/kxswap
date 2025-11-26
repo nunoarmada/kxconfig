@@ -52,49 +52,87 @@ interactive_select() {
   local selected=0
   local key
   local restore_terminal=false
+  local TTY_DEV=""
+  
+  # Check if we have a TTY available
+  if [ -t 0 ] && [ -c /dev/tty ]; then
+    TTY_DEV="/dev/tty"
+  else
+    # Fallback to stderr for output, stdin for input
+    TTY_DEV=""
+  fi
   
   # Cleanup function to restore terminal
   cleanup_terminal() {
-    if [ "$restore_terminal" = true ]; then
-      tput cnorm >/dev/tty  # Show cursor
-      tput ed >/dev/tty     # Clear to end of screen
+    if [ "$restore_terminal" = true ] && [ -n "$TTY_DEV" ]; then
+      tput cnorm >"$TTY_DEV" 2>/dev/null || true  # Show cursor
+      tput ed >"$TTY_DEV" 2>/dev/null || true     # Clear to end of screen
     fi
   }
   
-  # Hide cursor
-  tput civis
-  restore_terminal=true
-  trap cleanup_terminal EXIT INT TERM
+  # Hide cursor (only if TTY available)
+  if [ -n "$TTY_DEV" ]; then
+    tput civis >"$TTY_DEV" 2>/dev/null || true
+    restore_terminal=true
+    trap cleanup_terminal EXIT INT TERM
+  fi
   
   while true; do
-    # Clear screen and move to top
-    tput clear >/dev/tty
-    tput cup 0 0 >/dev/tty
+    # Clear screen and move to top (only if TTY available)
+    if [ -n "$TTY_DEV" ]; then
+      tput clear >"$TTY_DEV" 2>/dev/null || true
+      tput cup 0 0 >"$TTY_DEV" 2>/dev/null || true
+    fi
     
-    echo "Select a project (use ↑↓ arrows, Enter to select, Ctrl+C to cancel):" >/dev/tty
-    echo "" >/dev/tty
+    if [ -n "$TTY_DEV" ]; then
+      echo "Select a project (use ↑↓ arrows, Enter to select, Ctrl+C to cancel):" >"$TTY_DEV"
+      echo "" >"$TTY_DEV"
+    else
+      echo "Select a project (use ↑↓ arrows, Enter to select, Ctrl+C to cancel):" >&2
+      echo "" >&2
+    fi
     
     # Display projects with selection indicator
     local i=0
     for name in "${projects[@]}"; do
       if [ $i -eq $selected ]; then
-        tput rev >/dev/tty  # Reverse video for selected
-        echo "  > $name" >/dev/tty
-        tput sgr0 >/dev/tty  # Reset formatting
+        if [ -n "$TTY_DEV" ]; then
+          tput rev >"$TTY_DEV" 2>/dev/null || true  # Reverse video for selected
+          echo "  > $name" >"$TTY_DEV"
+          tput sgr0 >"$TTY_DEV" 2>/dev/null || true  # Reset formatting
+        else
+          echo "  > $name" >&2
+        fi
       else
-        echo "    $name" >/dev/tty
+        if [ -n "$TTY_DEV" ]; then
+          echo "    $name" >"$TTY_DEV"
+        else
+          echo "    $name" >&2
+        fi
       fi
       i=$((i + 1))
     done
     
     # Read keypress from terminal
-    IFS= read -rsn1 key </dev/tty
+    if [ -n "$TTY_DEV" ]; then
+      IFS= read -rsn1 key <"$TTY_DEV" 2>/dev/null || key=""
+    else
+      IFS= read -rsn1 key 2>/dev/null || key=""
+    fi
     
     # Check for escape sequence (arrow keys)
     if [ "$key" = $'\x1b' ]; then
-      read -rsn1 -t 0.1 key </dev/tty 2>/dev/null || key=""
+      if [ -n "$TTY_DEV" ]; then
+        read -rsn1 -t 0.1 key <"$TTY_DEV" 2>/dev/null || key=""
+      else
+        read -rsn1 -t 0.1 key 2>/dev/null || key=""
+      fi
       if [ "$key" = '[' ]; then
-        read -rsn1 -t 0.1 key </dev/tty 2>/dev/null || key=""
+        if [ -n "$TTY_DEV" ]; then
+          read -rsn1 -t 0.1 key <"$TTY_DEV" 2>/dev/null || key=""
+        else
+          read -rsn1 -t 0.1 key 2>/dev/null || key=""
+        fi
         case "$key" in
           'A') # Up arrow
             if [ $selected -gt 0 ]; then
@@ -120,7 +158,7 @@ interactive_select() {
   
   # Restore terminal
   cleanup_terminal
-  trap - EXIT INT TERM
+  trap - EXIT INT TERM 2>/dev/null || true
   
   # Return selected project (only this goes to stdout)
   echo "${projects[$selected]}"
@@ -135,6 +173,8 @@ fi
 # If no arguments, use interactive selection
 if [ $# -eq 0 ]; then
   NAME=$(interactive_select)
+  # Trim whitespace from the selected name
+  NAME=$(echo "$NAME" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 elif [ $# -gt 1 ]; then
   err "Too many arguments provided."
   usage
@@ -142,6 +182,13 @@ elif [ $# -gt 1 ]; then
 else
   NAME="$1"
 fi
+
+# Validate that NAME is not empty
+if [ -z "$NAME" ]; then
+  err "Project name is empty."
+  exit 1
+fi
+
 SRC="$HOME/.kube/config-$NAME"
 DEST="$HOME/.kube/config"
 
