@@ -26,6 +26,23 @@ err() {
   echo "[$SCRIPT_NAME] ERROR: $*" >&2
 }
 
+# Validate project name (no special characters that could break file paths)
+validate_project_name() {
+  local name="$1"
+  if [ -z "$name" ]; then
+    return 1
+  fi
+  # Check for invalid characters: / \ : * ? " < > |
+  if [[ "$name" =~ [/\\:*?\"\<\>\|] ]]; then
+    return 1
+  fi
+  # Check for leading/trailing spaces or dots
+  if [[ "$name" =~ ^[[:space:].] ]] || [[ "$name" =~ [[:space:].]$ ]]; then
+    return 1
+  fi
+  return 0
+}
+
 usage() {
   cat <<EOF
 Usage: $SCRIPT_NAME [OPTIONS]
@@ -126,10 +143,6 @@ while [ $# -gt 0 ]; do
         err "A kubeconfig file has already been specified (via -m or -x)."
         exit 1
       fi
-      if [ -n "$REPLACE_FILE" ]; then
-        err "Cannot use both -m and -x options together."
-        exit 1
-      fi
       MERGE_FILE="$2"
       shift 2
       ;;
@@ -141,10 +154,6 @@ while [ $# -gt 0 ]; do
       fi
       if [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ]; then
         err "A kubeconfig file has already been specified (via -m or -x)."
-        exit 1
-      fi
-      if [ -n "$MERGE_FILE" ]; then
-        err "Cannot use both -m and -x options together."
         exit 1
       fi
       REPLACE_FILE="$2"
@@ -226,6 +235,13 @@ choose_project_interactive() {
     name="${f##*/config-}"
     projects+=("$name")
   done
+  
+  # Sort projects alphabetically
+  local sorted_projects=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && sorted_projects+=("$line")
+  done < <(printf '%s\n' "${projects[@]}" | sort)
+  projects=("${sorted_projects[@]}")
 
   if [ ${#projects[@]} -eq 0 ]; then
     # no projects yet - backup current config if it exists
@@ -245,9 +261,16 @@ choose_project_interactive() {
       exit 1
     fi
     echo "You don't have any projects defined yet."
-    read -rp "Name for the new project (will create ~/.kube/config-<name>): " PROJECT
+    read -rp "Name for the new project (will create ~/.kube/config-<name>): " PROJECT || exit 1
+    PROJECT=$(echo "$PROJECT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     if [ -z "$PROJECT" ]; then
       err "Empty project name, aborting."
+      exit 1
+    fi
+    if ! validate_project_name "$PROJECT"; then
+      err "Invalid project name: '$PROJECT'"
+      err "Project names cannot contain: / \\ : * ? \" < > |"
+      err "And cannot start or end with spaces or dots."
       exit 1
     fi
     return
@@ -267,7 +290,8 @@ choose_project_interactive() {
   fi
 
   echo
-  read -rp "Choose the project number: " choice
+  read -rp "Choose the project number: " choice || exit 1
+  choice=$(echo "$choice" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
   # validate number
   if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
@@ -281,9 +305,16 @@ choose_project_interactive() {
   fi
 
   if { [ -n "$MERGE_FILE" ] || [ -n "$REPLACE_FILE" ]; } && [ "$choice" -eq "$create_idx" ]; then
-    read -rp "Name for the new project: " PROJECT
+    read -rp "Name for the new project: " PROJECT || exit 1
+    PROJECT=$(echo "$PROJECT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     if [ -z "$PROJECT" ]; then
       err "Empty project name, aborting."
+      exit 1
+    fi
+    if ! validate_project_name "$PROJECT"; then
+      err "Invalid project name: '$PROJECT'"
+      err "Project names cannot contain: / \\ : * ? \" < > |"
+      err "And cannot start or end with spaces or dots."
       exit 1
     fi
     return
@@ -296,6 +327,14 @@ choose_project_interactive() {
 if [ -z "$PROJECT" ]; then
   echo "No project (-p) was specified."
   choose_project_interactive
+fi
+
+# Validate project name if provided via -p
+if ! validate_project_name "$PROJECT"; then
+  err "Invalid project name: '$PROJECT'"
+  err "Project names cannot contain: / \\ : * ? \" < > |"
+  err "And cannot start or end with spaces or dots."
+  exit 1
 fi
 
 KUBE_CONFIG="${BASE_DIR}/config-${PROJECT}"
@@ -313,8 +352,9 @@ if [ ! -f "$KUBE_CONFIG" ]; then
 
   source_file="${MERGE_FILE:-$REPLACE_FILE}"
   echo "Project '${PROJECT}' does not exist yet (file ${KUBE_CONFIG})."
-  read -rp "Do you want to create a new master based on '${source_file}'? [y/N]: " ans
+  read -rp "Do you want to create a new master based on '${source_file}'? [y/N]: " ans || exit 1
   ans="${ans:-N}"
+  ans=$(echo "$ans" | tr '[:upper:]' '[:lower:]')
   case "$ans" in
     y|Y)
       log "Creating new kubeconfig master at ${KUBE_CONFIG}..."

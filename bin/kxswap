@@ -43,6 +43,13 @@ interactive_select() {
     projects+=("$name")
   done
   
+  # Sort projects alphabetically
+  local sorted_projects=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && sorted_projects+=("$line")
+  done < <(printf '%s\n' "${projects[@]}" | sort)
+  projects=("${sorted_projects[@]}")
+  
   if [ ${#projects[@]} -eq 0 ]; then
     err "No projects found in ${BASE_DIR}/config-*"
     err "Use kxconfig to create a project first."
@@ -174,13 +181,15 @@ fi
 if [ $# -eq 0 ]; then
   NAME=$(interactive_select)
   # Trim whitespace from the selected name
-  NAME=$(echo "$NAME" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  NAME=$(printf '%s' "$NAME" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 elif [ $# -gt 1 ]; then
   err "Too many arguments provided."
   usage
   exit 1
 else
   NAME="$1"
+  # Trim whitespace from provided name
+  NAME=$(printf '%s' "$NAME" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 fi
 
 # Validate that NAME is not empty
