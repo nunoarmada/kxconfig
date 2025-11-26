@@ -3,12 +3,6 @@ name: Update Homebrew Formula
 on:
   release:
     types: [published]
-  workflow_run:
-    workflows: ["release-please"]
-    types:
-      - completed
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -17,10 +11,6 @@ jobs:
   update-homebrew:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
-    # Only run if release-please workflow succeeded (if triggered by workflow_run)
-    if: |
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     
     steps:
       - name: Checkout kxconfig repository
@@ -31,32 +21,15 @@ jobs:
       - name: Determine release tag
         id: tag
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-            echo "Using tag from release event: ${TAG}"
-          else
-            # Get the latest tag from the repository (when triggered by workflow_run)
-            # Fetch all tags first
-            git fetch --tags --force
-            # Get the most recent tag
-            TAG=$(git tag --sort=-creatordate | head -1)
-            
-            if [ -z "${TAG}" ]; then
-              echo "Error: Could not determine release tag from repository"
-              echo "Available tags:"
-              git tag -l || echo "No tags found"
-              exit 1
-            fi
-            echo "Using latest tag from repository: ${TAG}"
-          fi
+          TAG="${{ github.event.release.tag_name }}"
           
           if [ -z "${TAG}" ]; then
-            echo "Error: Could not determine release tag"
+            echo "Error: Could not get tag from release event"
             exit 1
           fi
           
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Detected tag: ${TAG}"
+          echo "Detected tag from release: ${TAG}"
 
       - name: Find valid tag format
         id: tag_format
@@ -70,24 +43,42 @@ jobs:
           
           FOUND_FORMAT=""
           FOUND_URL=""
+          MAX_RETRIES=5
+          RETRY_DELAY=10
           
-          for FORMAT in "${TAG_FORMATS[@]}"; do
-            URL="https://github.com/nunoarmada/kxconfig/archive/refs/tags/${FORMAT}.tar.gz"
-            HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
+          # Retry logic to ensure tag is available
+          for RETRY in $(seq 1 ${MAX_RETRIES}); do
+            echo "Attempt ${RETRY}/${MAX_RETRIES}: Trying to find valid tag format..."
             
-            if [ "${HTTP_CODE}" = "200" ]; then
-              FOUND_FORMAT="${FORMAT}"
-              FOUND_URL="${URL}"
-              echo "format=${FORMAT}" >> $GITHUB_OUTPUT
-              echo "url=${URL}" >> $GITHUB_OUTPUT
-              echo "Found valid tag format: ${FORMAT}"
-              break
+            for FORMAT in "${TAG_FORMATS[@]}"; do
+              URL="https://github.com/nunoarmada/kxconfig/archive/refs/tags/${FORMAT}.tar.gz"
+              echo "  Trying format: ${FORMAT}"
+              HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${URL}" 2>/dev/null || echo "000")
+              echo "  HTTP code: ${HTTP_CODE}"
+              
+              if [ "${HTTP_CODE}" = "200" ]; then
+                FOUND_FORMAT="${FORMAT}"
+                FOUND_URL="${URL}"
+                echo "format=${FORMAT}" >> $GITHUB_OUTPUT
+                echo "url=${URL}" >> $GITHUB_OUTPUT
+                echo "✓ Found valid tag format: ${FORMAT}"
+                break 2
+              fi
+            done
+            
+            if [ -z "${FOUND_FORMAT}" ] && [ ${RETRY} -lt ${MAX_RETRIES} ]; then
+              echo "Tag not yet available, waiting ${RETRY_DELAY} seconds before retry..."
+              sleep ${RETRY_DELAY}
             fi
           done
           
           if [ -z "${FOUND_FORMAT}" ]; then
-            echo "Error: Could not find valid tag format for ${TAG}"
+            echo "Error: Could not find valid tag format for ${TAG} after ${MAX_RETRIES} attempts"
             echo "Tried formats: ${TAG_FORMATS[*]}"
+            echo "Please verify the tag exists and is accessible at:"
+            for FORMAT in "${TAG_FORMATS[@]}"; do
+              echo "  - https://github.com/nunoarmada/kxconfig/archive/refs/tags/${FORMAT}.tar.gz"
+            done
             exit 1
           fi
 
