@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.5.1...kxconfig-v1.6.0) (2025-12-04)
+
+
+### Features
+
+* **kxconfig:** Enhance context deletion handling with backup and active config update ([b2b43b0](https://github.com/nunoarmada/kxconfig/commit/b2b43b0a795641a78e195edd1a3fc9f79cce7e3c))
+
 ## [1.5.1](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.5.0...kxconfig-v1.5.1) (2025-12-04)
 
 
