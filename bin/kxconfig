@@ -370,7 +370,7 @@ if [ ! -f "$KUBE_CONFIG" ]; then
   # apply delete if requested
   if [ -n "$DELETE_CONTEXT" ]; then
     log "Removing context '${DELETE_CONTEXT}' from new master..."
-    if ! KUBECONFIG="$KUBE_CONFIG" kubectl config delete-context "$DELETE_CONTEXT"; then
+    if ! kubectl --kubeconfig="$KUBE_CONFIG" config delete-context "$DELETE_CONTEXT" >/dev/null 2>&1; then
       err "Failed to remove context '${DELETE_CONTEXT}' in ${KUBE_CONFIG}."
       exit 1
     fi
@@ -424,9 +424,11 @@ fi
 
 # Apply delete on TMP_WORK, if requested
 if [ -n "$DELETE_CONTEXT" ]; then
-  log "Removing context '${DELETE_CONTEXT}' in work config..."
-  if ! KUBECONFIG="$TMP_WORK" kubectl config delete-context "$DELETE_CONTEXT"; then
-    err "Failed to remove context '${DELETE_CONTEXT}' in work config."
+  log "Removing context '${DELETE_CONTEXT}' from master kubeconfig..."
+  # Use kubectl to delete the context from the temporary work file
+  if ! kubectl --kubeconfig="$TMP_WORK" config delete-context "$DELETE_CONTEXT" >/dev/null 2>&1; then
+    err "Failed to remove context '${DELETE_CONTEXT}' from master kubeconfig."
+    err "The context may not exist in the project master file."
     exit 1
   fi
 fi
