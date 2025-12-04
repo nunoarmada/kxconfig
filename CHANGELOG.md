@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.5.0...kxconfig-v1.5.1) (2025-12-04)
+
+
+### Bug Fixes
+
+* **kxconfig:** Update context deletion commands to use --kubeconfig flag for improved clarity and error handling ([2b07554](https://github.com/nunoarmada/kxconfig/commit/2b075548928adcbdc0d27d485da3574391ffdaa9))
+
 ## [1.5.0](https://github.com/nunoarmada/kxconfig/compare/kxconfig-v1.4.2...kxconfig-v1.5.0) (2025-11-26)
 
 
