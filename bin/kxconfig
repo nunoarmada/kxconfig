@@ -393,6 +393,81 @@ fi
 
 # ---------- master already exists: normalize and apply operations ----------
 
+# Special case: if only delete operation (no merge/replace), work directly on master
+if [ -z "$MERGE_FILE" ] && [ -z "$REPLACE_FILE" ] && [ -n "$DELETE_CONTEXT" ]; then
+  # Check if context exists
+  if ! kubectl --kubeconfig="$KUBE_CONFIG" config get-contexts "$DELETE_CONTEXT" >/dev/null 2>&1; then
+    err "Context '${DELETE_CONTEXT}' does not exist in the project master file."
+    exit 1
+  fi
+  
+  # Check if this is the current active context in ~/.kube/config
+  current_context=""
+  current_config="${BASE_DIR}/config"
+  needs_active_update=false
+  
+  if [ -f "$current_config" ] && command -v kubectl >/dev/null 2>&1; then
+    current_context=$(kubectl --kubeconfig="$current_config" config current-context 2>/dev/null || echo "")
+    if [ "$current_context" = "$DELETE_CONTEXT" ]; then
+      needs_active_update=true
+      log "Context '${DELETE_CONTEXT}' is currently active in ~/.kube/config"
+    fi
+  fi
+  
+  # Create backup before deletion
+  BACKUP="${BACKUP_DIR}/${PROJECT}.bak"
+  cp "$KUBE_CONFIG" "$BACKUP"
+  log "Project backup created/updated at: $BACKUP"
+  
+  # Delete context directly from master
+  log "Removing context '${DELETE_CONTEXT}' from master kubeconfig..."
+  if ! kubectl --kubeconfig="$KUBE_CONFIG" config delete-context "$DELETE_CONTEXT" >/dev/null 2>&1; then
+    err "Failed to remove context '${DELETE_CONTEXT}' from master kubeconfig."
+    # Restore backup on failure
+    cp "$BACKUP" "$KUBE_CONFIG"
+    exit 1
+  fi
+  
+  # Verify the context was actually removed
+  if kubectl --kubeconfig="$KUBE_CONFIG" config get-contexts "$DELETE_CONTEXT" >/dev/null 2>&1; then
+    err "Context '${DELETE_CONTEXT}' still exists after deletion attempt."
+    # Restore backup on failure
+    cp "$BACKUP" "$KUBE_CONFIG"
+    exit 1
+  fi
+  
+  log "Update completed at: $KUBE_CONFIG"
+  log "Context '${DELETE_CONTEXT}' was removed from master kubeconfig."
+  log "If something goes wrong, you can restore from: $BACKUP"
+  
+  # If the deleted context was active, update the active config
+  if [ "$needs_active_update" = true ]; then
+    log "Updating active kubeconfig (~/.kube/config) since the deleted context was active..."
+    # Check if the current config is from this project
+    if [ -f "$current_config" ]; then
+      # Remove the context from active config as well
+      if kubectl --kubeconfig="$current_config" config get-contexts "$DELETE_CONTEXT" >/dev/null 2>&1; then
+        kubectl --kubeconfig="$current_config" config delete-context "$DELETE_CONTEXT" >/dev/null 2>&1 || true
+        log "Context removed from active kubeconfig."
+      fi
+      # If no contexts remain or current context is gone, try to switch to default or first available
+      remaining_contexts=$(kubectl --kubeconfig="$current_config" config get-contexts -o name 2>/dev/null | head -1 || echo "")
+      if [ -n "$remaining_contexts" ]; then
+        kubectl --kubeconfig="$current_config" config use-context "$remaining_contexts" >/dev/null 2>&1 || true
+        log "Switched to context: $remaining_contexts"
+      fi
+    fi
+  else
+    # Apply via kxswap automatically if not the active context
+    if command -v kxswap >/dev/null 2>&1; then
+      kxswap "${PROJECT}" || log "Warning: kxswap failed to apply active configuration."
+    fi
+  fi
+  
+  exit 0
+fi
+
+# For merge/replace operations (with or without delete), use temporary files
 TMP_CURRENT="$(mktemp "${TMPDIR:-/tmp}/kube-current.XXXXXX")"
 TMP_WORK="$(mktemp "${TMPDIR:-/tmp}/kube-work.XXXXXX")"
 
@@ -422,13 +497,22 @@ else
   cp "$TMP_CURRENT" "$TMP_WORK"
 fi
 
-# Apply delete on TMP_WORK, if requested
+# Apply delete on TMP_WORK, if requested (only when combined with merge/replace)
 if [ -n "$DELETE_CONTEXT" ]; then
   log "Removing context '${DELETE_CONTEXT}' from master kubeconfig..."
+  # Check if context exists in the work file
+  if ! kubectl --kubeconfig="$TMP_WORK" config get-contexts "$DELETE_CONTEXT" >/dev/null 2>&1; then
+    err "Context '${DELETE_CONTEXT}' does not exist in the project master file."
+    exit 1
+  fi
   # Use kubectl to delete the context from the temporary work file
   if ! kubectl --kubeconfig="$TMP_WORK" config delete-context "$DELETE_CONTEXT" >/dev/null 2>&1; then
     err "Failed to remove context '${DELETE_CONTEXT}' from master kubeconfig."
-    err "The context may not exist in the project master file."
+    exit 1
+  fi
+  # Verify the context was actually removed
+  if kubectl --kubeconfig="$TMP_WORK" config get-contexts "$DELETE_CONTEXT" >/dev/null 2>&1; then
+    err "Context '${DELETE_CONTEXT}' still exists after deletion attempt."
     exit 1
   fi
 fi
