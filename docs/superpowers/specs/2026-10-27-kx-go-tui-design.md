@@ -94,13 +94,19 @@ tview remains an acceptable fallback).
 ~/.kube/config-<project>  project master files (0600)
 ~/.kube/kx/state.json     { "previous": "<project>" }        (0600)
 ~/.kube/kx/backups/<project>/<UTC timestamp>-<op>.yaml       (dir 0700, files 0600)
-~/.kube/kx/shells/<pid>.yaml   per-shell isolated copies (deleted on exit)
+~/.kube/kx/shells/<pid>-<project>.yaml   per-shell isolated copies (deleted on exit)
 ```
 
 - The active project is derived from the symlink target, not stored.
 - Existing `~/.kube/backups/*.bak` from the bash tool are left untouched.
-- Backups: one before every mutating operation; keep the newest 20 per project
-  (my call).
+- Backups: one before every mutating operation except `kx ctx`/`kx ns` (a
+  one-field change), plus one before `$EDITOR` opens a project from the TUI;
+  keep the newest 20 per project (my call). `_initial` backups are never
+  pruned and can be restored to a new project with `kx restore --initial
+  [ID] --as NAME` (never over an existing project or `~/.kube/config`).
+- Read-modify-write operations read the project file once, back up exactly
+  those bytes, refuse a zero-length file and hold the client-go lock file
+  `<file>.lock` while writing, so they do not race with kubectl.
 - All writes are atomic for project files (write temp in same dir with 0600,
   fsync, rename). Writes through the active symlink follow it (verified:
   client-go `WriteToFile` uses `os.WriteFile`, which follows symlinks).
@@ -111,8 +117,9 @@ tview remains an acceptable fallback).
 
 When `~/.kube/config` is a regular file (not our symlink) and the user activates
 a project:
-1. If it is byte-identical to some `config-<p>`, back it up and replace it with a
-   symlink to `config-<p>` without asking.
+1. If it holds the same kubeconfig as some `config-<p>` (compared
+   semantically, so a file that was imported and re-serialised still matches),
+   back it up and replace it with a symlink to `config-<p>` without asking.
 2. Otherwise, back it up to `~/.kube/kx/backups/_initial/` and ask: import it
    as a new project (name prompt) or just replace it with the link. Never
    delete it without a backup.
@@ -155,6 +162,10 @@ Conflict policy:
 - `rename`: incoming entity gets a suffix (`-2`, `-3`…), and references from the
   incoming contexts are rewritten accordingly.
 - `overwrite`: incoming wins; `skip`: master wins (old behaviour, now explicit).
+  Existing contexts that follow an overwritten cluster/user (and are not
+  themselves replaced) now use the incoming one; the merge reports them
+  (`Rebound`), and the CLI/TUI list them and ask for confirmation (`--yes`
+  without a terminal) before anything is written.
 - TUI: a conflict screen lists each clash with a short field-level summary
   (server URL, auth type — never secret values) and lets the user choose per
   item or for all.
@@ -178,7 +189,7 @@ Switching projects never changes namespaces. Namespace changes only via
 
 ### `kx shell <project>` (per-terminal mode)
 
-- Copies the project file to `~/.kube/kx/shells/<pid>.yaml` (0600), spawns
+- Copies the project file to `~/.kube/kx/shells/<pid>-<project>.yaml` (0600), spawns
   `$SHELL` with `KUBECONFIG` set to it and `KX_PROJECT=<project>`,
   `KX_SHELL=1`. Removes the copy on exit.
 - Context/namespace changes inside the shell are isolated and discarded on exit
