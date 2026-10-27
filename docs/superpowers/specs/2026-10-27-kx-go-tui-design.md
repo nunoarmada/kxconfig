@@ -59,7 +59,7 @@ redesigned.
 
 ## Constraints
 
-- Go 1.24 (installed toolchain). Module: `github.com/nunoarmada/kxconfig`.
+- Go 1.27 (latest; owner asked for latest versions). Module: `github.com/nunoarmada/kxconfig`.
 - Keep the existing on-disk layout `~/.kube/config-<project>` so current users'
   projects work with zero migration.
 - Release flow currently uses release-please + a custom Homebrew update
