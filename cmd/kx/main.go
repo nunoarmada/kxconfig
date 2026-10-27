@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"golang.org/x/term"
 
@@ -12,13 +13,26 @@ import (
 	"github.com/nunoarmada/kxconfig/v2/internal/tui"
 )
 
+// version is set at release time with -ldflags "-X main.version=...".
 var version = "dev"
+
+// resolveVersion returns v, or for an unstamped build ("dev") the module
+// version recorded by "go install ...@vX.Y.Z", when there is one.
+func resolveVersion(v string, info *debug.BuildInfo) string {
+	if v == "dev" && info != nil && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return v
+}
 
 func main() {
 	root, err := store.DefaultRoot()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "kx: %v\n", err)
 		os.Exit(1)
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		version = resolveVersion(version, info)
 	}
 	st, env := store.New(root), store.EnvFromOS()
 	d := cli.Deps{
