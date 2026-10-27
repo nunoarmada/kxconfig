@@ -1,6 +1,6 @@
 # kx — Go rewrite with a modern TUI
 
-Status: draft for approval · Date: 2026-10-27
+Status: approved · Date: 2026-10-27
 
 ## Intent
 
@@ -63,8 +63,9 @@ redesigned.
 - Keep the existing on-disk layout `~/.kube/config-<project>` so current users'
   projects work with zero migration.
 - Release flow currently uses release-please + a custom Homebrew update
-  workflow (tap `nunoarmada/kxconfig`). Changing CI/release is part of this
-  project and needs the owner's sign-off on the PR.
+  workflow (tap `nunoarmada/kxconfig`, secret `HOMEBREW_TAP_TOKEN`). Owner
+  decided: CI/release changes and removal of the bash tooling ship in this same
+  work, as the final phase.
 
 ## Approaches
 
