@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -141,19 +142,19 @@ func (m Model) header(lay layoutInfo) string {
 	case m.env.InShell:
 		global := m.sty.dim.Render("none")
 		if m.active != "" {
-			global = m.active
+			global = safetext.Clean(m.active)
 		}
-		left += m.sty.warn.Bold(true).Render(m.gl.shellMark+" shell: "+m.env.Project) +
+		left += m.sty.warn.Bold(true).Render(m.gl.shellMark+" shell: "+safetext.Clean(m.env.Project)) +
 			m.sty.dim.Render("  "+m.gl.dot+"  global: ") + global
 	case lay.mode == layoutNarrow:
 		left = " " + m.sty.accent.Render("kx") + " " + m.sty.dim.Render(m.gl.crumb) + " "
 		if m.focus == paneProjects || m.cur.name == "" {
 			left += m.sty.title.Render(paneProjects.String())
 		} else {
-			left += m.cur.name + " " + m.sty.dim.Render(m.gl.crumb) + " " + m.sty.title.Render(m.focus.String())
+			left += safetext.Clean(m.cur.name) + " " + m.sty.dim.Render(m.gl.crumb) + " " + m.sty.title.Render(m.focus.String())
 		}
 	case m.active != "":
-		left += m.sty.dim.Render("active: ") + m.sty.active.Render(m.gl.active) + " " + m.sty.active.Bold(true).Render(m.active)
+		left += m.sty.dim.Render("active: ") + m.sty.active.Render(m.gl.active) + " " + m.sty.active.Bold(true).Render(safetext.Clean(m.active))
 	default:
 		left += m.sty.dim.Render("active: none")
 	}
@@ -168,6 +169,7 @@ func (m Model) header(lay layoutInfo) string {
 // bannerRow draws the persistent one-row banner.
 func (m Model) bannerRow(lay layoutInfo) string {
 	text, warn := m.bannerText()
+	text = safetext.Clean(text)
 	if m.w < 80 {
 		if i := strings.Index(text, ". "); i >= 0 {
 			text = text[:i+1]

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -77,7 +78,7 @@ func Run(d Deps, args []string) int {
 	cmd := NewRootCmd(d)
 	cmd.SetArgs(args)
 	if err := cmd.Execute(); err != nil {
-		_, _ = fmt.Fprintf(d.Err, "kx: %v\n", err)
+		_, _ = fmt.Fprintf(d.Err, "kx: %s\n", safetext.Clean(err.Error()))
 		return 1
 	}
 	return 0

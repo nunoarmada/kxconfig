@@ -1,6 +1,10 @@
 package tui
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/nunoarmada/kxconfig/internal/safetext"
+)
 
 // detailsPane draws the facts of the selected context. It shows server, user
 // name and auth kind only: never secret values.
@@ -24,7 +28,7 @@ func (m Model) detailLines(iw int) []string {
 	}
 	if m.cur.err != nil {
 		return []string{
-			m.sty.warn.Render(m.gl.warn + " Cannot parse config-" + m.cur.name + ": " + firstLine(m.cur.err.Error())),
+			m.sty.warn.Render(m.gl.warn + " Cannot parse config-" + safetext.Clean(m.cur.name) + ": " + firstLine(m.cur.err.Error())),
 			"",
 			"Press e to edit it.",
 		}
@@ -37,11 +41,11 @@ func (m Model) detailLines(iw int) []string {
 		return dim.Render(fmt.Sprintf("%-9s ", k)) + v
 	}
 	return []string{
-		kv("context", c.Name),
-		kv("cluster", dash(c.Cluster)),
-		kv("server", dash(c.Server)),
-		kv("user", dash(c.User)),
-		kv("auth", dash(c.AuthKind)),
-		kv("file", m.tilde(m.cur.path)),
+		kv("context", safetext.Clean(c.Name)),
+		kv("cluster", dash(safetext.Clean(c.Cluster))),
+		kv("server", dash(safetext.Clean(c.Server))),
+		kv("user", dash(safetext.Clean(c.User))),
+		kv("auth", dash(safetext.Clean(c.AuthKind))),
+		kv("file", safetext.Clean(m.tilde(m.cur.path))),
 	}
 }

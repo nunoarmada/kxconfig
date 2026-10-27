@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -91,7 +92,7 @@ func (a *app) newBackups() *cobra.Command {
 			tw := tabwriter.NewWriter(a.Out, 0, 4, 2, ' ', 0)
 			_, _ = fmt.Fprintln(tw, "ID\tTIME\tOP")
 			for _, b := range bs {
-				_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", b.ID, b.Time.Local().Format(time.DateTime), b.Op)
+				_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", safetext.Clean(b.ID), b.Time.Local().Format(time.DateTime), safetext.Clean(b.Op))
 			}
 			return tw.Flush()
 		},

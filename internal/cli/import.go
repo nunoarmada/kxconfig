@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nunoarmada/kxconfig/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -58,7 +59,7 @@ func (a *app) importCmd(file, project, onConflict string, replace, useAfter, yes
 	}
 	res, err := a.Store.Import(file, project, mode, kubecfg.MergeOptions{Default: policy})
 	for _, w := range res.Warnings {
-		_, _ = fmt.Fprintf(a.Err, "warning: %s\n", w)
+		_, _ = fmt.Fprintf(a.Err, "warning: %s\n", safetext.Clean(w))
 	}
 	if errors.Is(err, kubecfg.ErrConflicts) {
 		a.printConflicts(res.Report.Conflicts)
@@ -97,7 +98,7 @@ func (a *app) printConflicts(cs []kubecfg.Conflict) {
 	tw := tabwriter.NewWriter(a.Err, 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "KIND\tNAME\tEXISTING\tINCOMING")
 	for _, c := range cs {
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", c.Ref.Kind, c.Ref.Name, c.Existing, c.Incoming)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", safetext.Clean(string(c.Ref.Kind)), safetext.Clean(c.Ref.Name), safetext.Clean(c.Existing), safetext.Clean(c.Incoming))
 	}
 	_ = tw.Flush()
 }
@@ -114,7 +115,7 @@ func (a *app) printImport(res store.ImportResult) {
 	_, _ = fmt.Fprintf(a.Out, "Project %s %s: added %d, updated %d, renamed %d, skipped %d, dropped %d\n",
 		res.Project, state, len(r.Added), len(r.Overwritten), len(r.Renamed), len(r.Skipped), len(r.Dropped))
 	for _, d := range r.Dropped {
-		_, _ = fmt.Fprintf(a.Out, "  dropped %s %s: references a skipped or missing cluster/user\n", d.Kind, d.Name)
+		_, _ = fmt.Fprintf(a.Out, "  dropped %s %s: references a skipped or missing cluster/user\n", safetext.Clean(string(d.Kind)), safetext.Clean(d.Name))
 	}
 }
 

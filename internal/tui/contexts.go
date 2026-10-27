@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/nunoarmada/kxconfig/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 )
 
 // contextsPane draws the contexts of the selected project.
@@ -16,14 +17,14 @@ func (m Model) contextsPane(r rect, focused, single bool) string {
 	}
 	meta := count
 	if m.cur.name != "" {
-		meta = m.cur.name + " " + count
+		meta = safetext.Clean(m.cur.name) + " " + count
 	}
 	title := m.paneTitle("CONTEXTS", meta, m.paneNote(paneContexts, single), iw, focused)
 
 	if len(m.cur.ctxs) == 0 {
 		note := "No contexts."
 		if m.cur.name != "" {
-			note = "No contexts in " + m.cur.name + "."
+			note = "No contexts in " + safetext.Clean(m.cur.name) + "."
 		}
 		return m.box(r.w, r.h, focused, title, []string{m.sty.dim.Render(note)})
 	}
@@ -57,13 +58,13 @@ func (m Model) contextRow(c kubecfg.ContextInfo, cols ctxCols, drop, selected, f
 		marker = cell{s: m.gl.current, st: m.sty.accent}
 		nameSt = m.sty.bold
 	}
-	ns := cell{s: dash(c.Namespace)}
+	ns := cell{s: dash(safetext.Clean(c.Namespace))}
 	if c.Namespace == "" {
 		ns.st = m.sty.dim
 	}
-	cells := []cell{cursor, marker, {s: " "}, {s: m.fit(c.Name, cols.name), st: nameSt}}
+	cells := []cell{cursor, marker, {s: " "}, {s: m.fit(safetext.Clean(c.Name), cols.name), st: nameSt}}
 	if !drop {
-		cells = append(cells, cell{s: "  "}, cell{s: m.fit(dash(c.Cluster), cols.cluster)})
+		cells = append(cells, cell{s: "  "}, cell{s: m.fit(dash(safetext.Clean(c.Cluster)), cols.cluster)})
 	}
 	cells = append(cells, cell{s: "  "}, ns)
 	return m.row(iw, mode, cells...)

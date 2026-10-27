@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -52,7 +53,7 @@ func (m Model) withFilter(lines []string, rows int, p pane, iw int, focused bool
 		m.finput.SetWidth(max(1, iw-4))
 		return append(lines, prefix+m.finput.View())
 	}
-	return append(lines, prefix+m.activeFilterOf(p))
+	return append(lines, prefix+safetext.Clean(m.activeFilterOf(p)))
 }
 
 func (m Model) activeFilterOf(p pane) string {
@@ -80,13 +81,14 @@ func (m Model) projectRow(p store.Project, selected, focused bool, iw int) strin
 	}
 
 	avail := max(0, iw-3)
-	nameW := lipgloss.Width(p.Name)
+	pname := safetext.Clean(p.Name)
+	nameW := lipgloss.Width(pname)
 	badge, bst := m.projectBadge(p, nameW, avail)
-	name := cell{s: p.Name, st: nameSt}
+	name := cell{s: pname, st: nameSt}
 	cells := []cell{cursor, marker, {s: " "}, name}
 	if badge != "" {
 		bw := lipgloss.Width(badge)
-		name.s = m.fit(p.Name, avail-1-bw)
+		name.s = m.fit(pname, avail-1-bw)
 		cells = []cell{cursor, marker, {s: " "}, name, {s: " "}, {s: badge, st: bst}}
 	}
 	return m.row(iw, mode, cells...)
@@ -126,9 +128,9 @@ func (m Model) contextCols(avail int, dropCluster bool) ctxCols {
 	c := ctxCols{name: lipgloss.Width("NAME"), cluster: lipgloss.Width("CLUSTER"), ns: lipgloss.Width("NAMESPACE")}
 	for _, i := range m.visibleContexts() {
 		x := m.cur.ctxs[i]
-		c.name = max(c.name, lipgloss.Width(x.Name))
-		c.cluster = max(c.cluster, lipgloss.Width(x.Cluster))
-		c.ns = max(c.ns, lipgloss.Width(dash(x.Namespace)))
+		c.name = max(c.name, lipgloss.Width(safetext.Clean(x.Name)))
+		c.cluster = max(c.cluster, lipgloss.Width(safetext.Clean(x.Cluster)))
+		c.ns = max(c.ns, lipgloss.Width(dash(safetext.Clean(x.Namespace))))
 	}
 	gaps := 4
 	if dropCluster {

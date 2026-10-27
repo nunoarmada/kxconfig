@@ -767,3 +767,44 @@ func TestDeleteForceActiveSaysLinkRemoved(t *testing.T) {
 		t.Fatalf("out:\n%s", out)
 	}
 }
+
+func TestOutputStripsTerminalEscapes(t *testing.T) {
+	h := newHarness(t)
+	evil := `apiVersion: v1
+kind: Config
+current-context: "evil\e]0;pwned\a\e[2J"
+clusters:
+- name: "cl\e[31m"
+  cluster:
+    server: "https://x\e[2J"
+users:
+- name: "us\a"
+  user:
+    token: t
+contexts:
+- name: "evil\e]0;pwned\a\e[2J"
+  context:
+    cluster: "cl\e[31m"
+    user: "us\a"
+    namespace: "ns\e[H"
+`
+	// YAML double-quoted strings understand \e and \a.
+	file := h.write("evil.yaml", evil)
+	h.mustRun("import", file, "-p", "a")
+	bad := func(what, s string) {
+		t.Helper()
+		if strings.ContainsAny(s, "\x1b\x07") {
+			t.Errorf("%s output contains terminal control bytes: %q", what, s)
+		}
+	}
+	bad("ctx", h.mustRun("ctx", "-p", "a"))
+	bad("ls", h.mustRun("ls"))
+	_, out, errOut := h.run("import", file, "-p", "a") // conflicts table + error
+	bad("import conflicts", out+errOut)
+	_, out, errOut = h.run("rm-ctx", "evil\x1b]0;pwned\x07\x1b[2J", "-p", "a")
+	bad("rm-ctx", out+errOut)
+	_, out, errOut = h.run("ctx", "nope\x1b[2J", "-p", "a")
+	bad("ctx error", out+errOut)
+	_, out, errOut = h.run("rm-ctx", "evil\x1b]0;pwned\x07\x1b[2J", "-p", "a", "--yes")
+	bad("rm-ctx --yes", out+errOut)
+}

@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -21,7 +22,8 @@ type dialog interface {
 	update(m *Model, msg tea.Msg) (dialog, tea.Cmd)
 	// view draws the dialog already boxed, at most maxW x maxH.
 	view(m *Model, maxW, maxH int) string
-	// hints is the hint bar while the dialog is open; the last entry is pinned.
+	// hints is the hint bar while the dialog is open. It must not be empty:
+	// the last entry is pinned and survives when the bar is too narrow.
 	hints() []hint
 }
 
@@ -205,14 +207,14 @@ func (d *adoptDialog) view(m *Model, maxW, _ int) string {
 		w = maxW
 	}
 	iw := dialogInner(w)
-	cfg := m.tilde(m.store.ConfigPath())
-	backups := m.tilde(m.store.Backups.Dir)
+	cfg := safetext.Clean(m.tilde(m.store.ConfigPath()))
+	backups := safetext.Clean(m.tilde(m.store.Backups.Dir))
 	body := wrap(cfg+" is not managed by kx. It will be backed up to "+backups+"/_initial first.", iw)
 	body = append(body, "",
 		m.sty.accent.Render("i")+"    Import it as a new project (name)",
-		m.sty.accent.Render("r")+"    Replace it with a link to "+d.target,
+		m.sty.accent.Render("r")+"    Replace it with a link to "+safetext.Clean(d.target),
 		m.sty.accent.Render("esc")+"  Cancel")
-	return m.dialogBox("Use "+d.target+"?", body, w, false, 1)
+	return m.dialogBox("Use "+safetext.Clean(d.target)+"?", body, w, false, 1)
 }
 
 func (d *adoptDialog) hints() []hint {

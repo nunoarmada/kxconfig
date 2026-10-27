@@ -55,7 +55,10 @@ func (m *Model) setContext() tea.Cmd {
 		return nil
 	}
 	flag := p.Name
-	if m.env.InShell && p.Name == m.env.Project {
+	if m.env.InShell {
+		if p.Name != m.env.Project {
+			return m.say(statusWarn, "Inside a kx shell only "+m.env.Project+" can be changed; exit the shell first")
+		}
 		flag = ""
 	}
 	t, err := m.store.Target(flag, m.env)

@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -612,6 +613,14 @@ func TestShellMode(t *testing.T) {
 	m = keys(m, "s")
 	mustContain(t, plain(m), "⚠ Already inside a kx shell")
 
+	// Another project's contexts are refused: nothing else may be edited.
+	m = keys(m, "tab", "enter") // cursor is on prod
+	mustContain(t, plain(m), "Inside a kx shell only staging can be changed; exit the shell first")
+	if c, _ := kubecfg.Load(filepath.Join(root, "config-prod")); c.CurrentContext != "prod-eu" {
+		t.Errorf("prod master edited from inside a shell: %q", c.CurrentContext)
+	}
+	m = keys(m, "shift+tab")
+
 	// Context changes edit the shell's copy, never the master file.
 	m = keys(m, "down", "tab") // staging; its contexts come from the shell's copy
 	mustContain(t, plain(m), "CONTEXTS staging 2", "stg2")
@@ -849,4 +858,89 @@ func paneText(v string, _, n int) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+type bareDialog struct{}
+
+func (bareDialog) update(*Model, tea.Msg) (dialog, tea.Cmd) { return nil, nil }
+func (bareDialog) view(m *Model, w, _ int) string {
+	return m.dialogBox("Bare", []string{"x"}, min(w, 20), false, 0)
+}
+func (bareDialog) hints() []hint { return nil }
+
+func TestHintBarSurvivesDialogWithoutHints(t *testing.T) {
+	m := open(t, fixture(t), 100, 30)
+	m.push(bareDialog{})
+	if got := lastLine(plain(m)); !strings.Contains(got, "? help") {
+		t.Errorf("hint bar = %q, want the pinned help hint", got)
+	}
+}
+
+var sgrRe = regexp.MustCompile(`^\[[0-9;:]*m`)
+
+func TestKubeconfigTextCannotInjectEscapes(t *testing.T) {
+	root := testRoot(t)
+	cfg := "apiVersion: v1\nkind: Config\ncurrent-context: " + `"` + `evil\e]0;pwned\a\e[2J` + `"` + `
+clusters:
+- name: "cl\e[31m"
+  cluster:
+    server: "https://x\e[2J"
+users:
+- name: "us\a"
+  user:
+    token: t
+contexts:
+- name: "` + `evil\e]0;pwned\a\e[2J` + `"
+  context:
+    cluster: "cl\e[31m"
+    user: "us\a"
+    namespace: "ns\e[H"
+`
+	writeProject(t, root, "evilproj", cfg, 0o600)
+	link(t, root, "evilproj")
+	for _, size := range [][2]int{{130, 30}, {90, 30}, {60, 20}} {
+		m := open(t, root, size[0], size[1])
+		for _, ks := range [][]string{nil, {"tab"}, {"tab"}, {"shift+tab", "shift+tab"}} {
+			m = keys(m, ks...)
+			raw := m.View().Content
+			if strings.ContainsAny(raw, "\a") || strings.Contains(raw, "\x1b]") || strings.Contains(raw, "\x1b[2J") || strings.Contains(raw, "\x1b[H") {
+				t.Fatalf("%v: injected sequence reached the view: %q", size, raw)
+			}
+			// Every ESC left must start an SGR (colour/attribute) sequence.
+			for _, part := range strings.Split(raw, "\x1b")[1:] {
+				if !sgrRe.MatchString(part) {
+					t.Fatalf("%v: non-SGR escape: %q", size, part[:min(len(part), 20)])
+				}
+			}
+		}
+	}
+	mustContain(t, plain(open(t, root, 130, 30)), "evil")
+}
+
+func TestInvalidProjectNeverEchoesSecrets(t *testing.T) {
+	root := testRoot(t)
+	// Malformed in several ways, each carrying secret values.
+	bad := map[string]string{
+		"flow":   "apiVersion: v1\nkind: Config\nusers: [{name: u, user: {token: " + secretToken + "\n",
+		"tab":    "apiVersion: v1\nkind: Config\nusers:\n- name: u\n\tuser:\n\t  token: " + secretToken + "\n",
+		"badkey": "apiVersion: v1\nkind: Config\nclusters: " + secretToken + "\n",
+		"binary": "apiVersion: v1\nkind: Config\nusers:\n- name: u\n  user:\n    client-key-data: " + secretKey + "!!!\n    token: [" + secretToken + "\n",
+	}
+	for name, content := range bad {
+		writeProject(t, root, name, content, 0o600)
+	}
+	for _, size := range [][2]int{{130, 30}, {80, 24}, {50, 12}} {
+		m := open(t, root, size[0], size[1])
+		for range bad {
+			for _, ks := range [][]string{nil, {"tab"}, {"tab"}, {"shift+tab", "shift+tab"}, {"j"}} {
+				m = keys(m, ks...)
+				m = keys(m, "enter") // tries to use the invalid project: error status
+				for _, s := range []string{secretToken, secretKey} {
+					if strings.Contains(m.View().Content, s) {
+						t.Fatalf("%v: secret %q echoed:\n%s", size, s, plain(m))
+					}
+				}
+			}
+		}
+	}
 }

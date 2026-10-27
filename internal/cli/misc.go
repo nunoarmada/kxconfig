@@ -10,6 +10,7 @@ import (
 
 	"github.com/nunoarmada/kxconfig/internal/fsutil"
 	"github.com/nunoarmada/kxconfig/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/shell"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
@@ -71,7 +72,7 @@ func (a *app) newLs() *cobra.Command {
 				if r.Status != "invalid" {
 					ctxs = fmt.Sprint(r.Contexts)
 				}
-				_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", mark, r.Name, ctxs, r.Status)
+				_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", mark, safetext.Clean(r.Name), ctxs, safetext.Clean(r.Status))
 			}
 			return tw.Flush()
 		},
@@ -147,7 +148,7 @@ func (a *app) newDoctor() *cobra.Command {
 				if !i.Fixed {
 					remaining++
 				}
-				_, _ = fmt.Fprintf(a.Out, "%s: %s: %s%s\n", i.Kind, i.Path, i.Message, state)
+				_, _ = fmt.Fprintf(a.Out, "%s: %s: %s%s\n", safetext.Clean(string(i.Kind)), safetext.Clean(i.Path), safetext.Clean(i.Message), state)
 			}
 			if remaining > 0 {
 				return fmt.Errorf("%d problem(s) remain", remaining)

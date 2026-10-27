@@ -6,6 +6,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 )
 
 // cell is one styled piece of a list row.
@@ -180,7 +182,7 @@ func fuzzyMatch(pat, s string) bool {
 // firstLine returns the first line of s.
 func firstLine(s string) string {
 	s, _, _ = strings.Cut(s, "\n")
-	return strings.TrimSpace(s)
+	return safetext.Clean(strings.TrimSpace(s))
 }
 
 // dash returns "-" for an empty value.

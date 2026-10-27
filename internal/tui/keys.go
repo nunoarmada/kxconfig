@@ -322,6 +322,9 @@ func (m Model) hints() []hint {
 // the right, never the pinned last one.
 func (m Model) hintBar(w int) string {
 	hs := m.hints()
+	if len(hs) == 0 {
+		hs = []hint{helpHint} // a dialog broke the non-empty contract; stay safe
+	}
 	render := func(h hint) (string, int) {
 		if h.key == "" {
 			return m.sty.dim.Render(h.label), lipgloss.Width(h.label)
