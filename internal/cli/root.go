@@ -90,7 +90,7 @@ func (a *app) confirm(question string) error {
 	if !a.IsTTY {
 		return errors.New("refusing to continue without confirmation; stdin is not a terminal (pass --yes)")
 	}
-	_, _ = fmt.Fprintf(a.Err, "%s [y/N] ", question)
+	_, _ = fmt.Fprintf(a.Err, "%s [y/N] ", safetext.Clean(question))
 	line, err := a.readLine()
 	if err != nil {
 		return err

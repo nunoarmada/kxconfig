@@ -808,3 +808,13 @@ contexts:
 	_, out, errOut = h.run("rm-ctx", "evil\x1b]0;pwned\x07\x1b[2J", "-p", "a", "--yes")
 	bad("rm-ctx --yes", out+errOut)
 }
+
+func TestConfirmPromptStripsTerminalEscapes(t *testing.T) {
+	h, _ := twoVersions(t)
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("n\n")
+	_, _, errOut := h.run("restore", "a", "evil\x1b]0;pwned\x07\x1b[2J")
+	if strings.ContainsAny(errOut, "\x1b\x07") {
+		t.Fatalf("confirm prompt leaked control characters: %q", errOut)
+	}
+}
