@@ -296,7 +296,16 @@ func TestPathCompletion(t *testing.T) {
 	m := open(t, root, 100, 30)
 	m = typeText(keys(m, "i"), dir+"/al")
 	m = keys(m, "tab")
-	mustContain(t, plain(m), dir+"/al", "alpha.yaml  alpine.yaml")
+	// The input may be visually truncated for long temp paths (macOS), so
+	// check its value directly and only the candidate list on screen.
+	pd, ok := m.dialogs[len(m.dialogs)-1].(*pathDialog)
+	if !ok {
+		t.Fatalf("top dialog = %T, want *pathDialog", m.dialogs[len(m.dialogs)-1])
+	}
+	if got := pd.in.Value(); got != dir+"/alp" {
+		t.Errorf("input after tab = %q, want %q", got, dir+"/alp")
+	}
+	mustContain(t, plain(m), "alpha.yaml  alpine.yaml")
 }
 
 func TestDeleteContextConfirmShowsOrphans(t *testing.T) {

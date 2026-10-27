@@ -170,7 +170,13 @@ func TestCommandResolvesRelativeFileRefs(t *testing.T) {
 
 func TestSpawnIgnoresShellExitStatus(t *testing.T) {
 	s := newStore(t)
-	t.Setenv("SHELL", "/bin/false")
+	// A shell that exits non-zero; /bin/false is not on every OS (macOS has
+	// /usr/bin/false), so use a script.
+	fail := filepath.Join(t.TempDir(), "fail.sh")
+	if err := os.WriteFile(fail, []byte("#!/bin/sh\nexit 3\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", fail)
 	if err := Spawn(s, "prod", store.Env{}); err != nil {
 		t.Fatalf("Spawn = %v, want nil for non-zero shell exit", err)
 	}
