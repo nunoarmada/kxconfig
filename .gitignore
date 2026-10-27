@@ -31,3 +31,11 @@ Thumbs.db
 # *.yml
 # config-*
 
+.superpowers/
+
+# Go build output
+/dist/
+/kx
+
+# GoReleaser generated completions
+/completions/

@@ -1,409 +1,160 @@
-# kxconfig
+# kx
 
-Bash tools to manage multiple Kubernetes kubeconfigs organized by project.
+`kx` keeps one kubeconfig per project and switches between them, from a terminal UI or the command line. It is a single static Go binary and does not need `kubectl`.
 
-## 📋 Description
+`kx` replaces the `kxconfig` and `kxswap` bash scripts of 1.x. See [Migrating from 1.x](#migrating-from-1x).
 
-`kxconfig` is a set of tools that allows you to manage Kubernetes kubeconfigs organized by project, making it easier to work with multiple clusters and environments.
+## Install
 
-### Components
-
-- **`kxconfig`**: Main tool to merge, replace, and remove contexts from kubeconfigs organized by project
-- **`kxswap`**: Auxiliary tool to quickly swap the active kubeconfig to a specific project
-
-## ✨ Features
-
-### kxconfig
-
-- ✅ **Merge** new kubeconfigs into a master per project (`~/.kube/config-<name>`)
-- ✅ **Replace** master kubeconfig (instead of merging)
-- ✅ **Remove contexts** from master files (`~/.kube/config-<name>`)
-- ✅ **Create new projects** interactively
-- ✅ **Automatic backup** before any changes
-- ✅ **Validation** of kubeconfigs before processing
-- ✅ **"Nothing to do" detection** (avoids unnecessary changes)
-- ✅ **Automatic integration** with `kxswap` (if available) to apply changes to active config
-
-### kxswap
-
-- ✅ **Quick swap** of the active kubeconfig (`~/.kube/config`)
-- ✅ **Validation** of source file
-- ✅ **Automatic configuration** of default namespace
-
-## 📦 Requirements
-
-- `bash` (version 4.0 or higher)
-- `kubectl` installed and in `PATH`
-- Write permissions in `~/.kube/`
-
-## 🚀 Installation
-
-### Method 1: Homebrew (macOS/Linux) - Recommended
+**Homebrew** (macOS and Linux)
 
 ```bash
-# Install via Homebrew tap
 brew install nunoarmada/kxconfig/kxconfig
 ```
 
-### Method 2: Automatic Script Installation
-
-The installation script automatically checks:
-- ✅ If `kubectl` is installed
-- ✅ Shell type (bash, zsh, fish)
-- ✅ If `~/.local/bin` is in PATH
-- ✅ Automatically adds to PATH if necessary
+**Go** (1.27 or newer)
 
 ```bash
-# Download and execute
-curl -fsSL https://raw.githubusercontent.com/nunoarmada/kxconfig/main/scripts/install.sh | bash
+go install github.com/nunoarmada/kxconfig/v2/cmd/kx@latest
 ```
 
-**Note**: If your shell is not automatically supported (bash, zsh, fish), you'll need to manually add `~/.local/bin` to your PATH.
+**Release tarball**
 
-### Method 3: Manual Installation
+Download the archive for your OS and CPU (`darwin` or `linux`, `amd64` or `arm64`) from the [releases page](https://github.com/nunoarmada/kxconfig/releases), check it against `checksums.txt`, and put `kx` in your `PATH`. The archive also holds shell completions in `completions/`.
+
+Check the install with `kx version`. Completions: `kx completion bash|zsh|fish` (Homebrew installs them for you).
+
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/nunoarmada/kxconfig.git
-cd kxconfig
-
-# Copy scripts to a directory in PATH
-cp bin/kxconfig bin/kxswap ~/.local/bin/
-
-# Or create symlinks
-ln -s $(pwd)/bin/kxconfig ~/.local/bin/kxconfig
-ln -s $(pwd)/bin/kxswap ~/.local/bin/kxswap
-
-# Ensure they are executable
-chmod +x ~/.local/bin/kxconfig ~/.local/bin/kxswap
+kx import ~/Downloads/dev.yaml -p dev      # create project "dev" from a kubeconfig file
+kx import ~/Downloads/prod.yaml -p prod --use
+kx ls                                      # list projects, the active one is marked
+kx use dev                                 # activate dev globally
+kx use -                                   # go back to the previous project
+kx                                         # open the terminal UI
 ```
 
-## 🗑️ Uninstallation
+Each project is a file `~/.kube/config-<project>`. The active project is a symlink: `~/.kube/config` points at it, so `kubectl`, `helm`, IDEs and anything else that reads `~/.kube/config` follow the switch. Project names match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`.
 
-To uninstall the tools:
+## Terminal UI
+
+Run `kx` with no arguments in a terminal. Press `?` for the full list.
+
+| Keys | Action |
+|---|---|
+| `tab` / `shift+tab`, `h` `l`, arrows | move between panes |
+| `j` `k`, arrows, `g` `G` | move the cursor, top, bottom |
+| `/` | filter the list |
+| `:` | command palette (import, rename, delete, backups, shell, edit, doctor, reload, quit) |
+| `ctrl+r` | reload from disk |
+| `?` | help |
+| `esc` | back out of a dialog or filter; quits at the top level |
+| `q`, `ctrl+c` | quit |
+
+Projects pane:
+
+| Key | Action |
+|---|---|
+| `enter` | use (activate globally) |
+| `i` | import a kubeconfig |
+| `r` | rename |
+| `D` | delete (a backup is kept) |
+| `b` | backups and restore |
+| `s` | open a `kx shell` |
+| `e` | edit in `$EDITOR` |
+
+Contexts pane:
+
+| Key | Action |
+|---|---|
+| `enter` | set as the current context |
+| `n` | set the namespace |
+| `d` | delete the context (and its orphaned cluster and user) |
+
+## Commands
+
+Every command except `kx` itself works without a terminal. Commands that would ask for confirmation fail instead when stdin is not a terminal; pass `--yes` to confirm up front.
+
+| Command | What it does |
+|---|---|
+| `kx` | open the terminal UI |
+| `kx use PROJECT` / `kx use -` | activate a project globally / go back to the previous one |
+| `kx ls [-o json]` | list projects |
+| `kx current` | print the active project (and this shell's project inside `kx shell`) |
+| `kx import FILE [-p PROJECT] [--replace] [--on-conflict fail\|rename\|overwrite\|skip] [--use] [--yes]` | merge a kubeconfig into a project, or replace the project with it; creates the project if missing |
+| `kx ctx [NAME] [-p PROJECT]` | list contexts, or switch the current one |
+| `kx ns NAMESPACE [-p PROJECT]` | set the namespace of the current context (a DNS-1123 name; `""` clears it) |
+| `kx rm-ctx CONTEXT [-p PROJECT] [--keep-orphans] [--yes]` | delete a context and the cluster and user only it used |
+| `kx rename OLD NEW` | rename a project |
+| `kx delete PROJECT [--force] [--yes]` | delete a project (a backup is kept; `--force` for the active one) |
+| `kx backups PROJECT` / `kx backups --initial` | list a project's backups, newest first (`--initial`: the original `~/.kube/config` files kx backed up) |
+| `kx restore PROJECT [ID] [--yes]` | restore a backup (default: the latest) |
+| `kx restore --initial [ID] --as NAME` | write an original `~/.kube/config` backup to a new project `NAME` (never overwrites a project or `~/.kube/config`) |
+| `kx shell PROJECT` | open a subshell isolated to one project |
+| `kx doctor [--fix]` | check permissions, the config link and project files |
+| `kx completion bash\|zsh\|fish` | print a shell completion script |
+| `kx version` | print the version |
+
+Example:
 
 ```bash
-# Uninstall scripts and configuration (keeps backups and project configs)
-./scripts/uninstall.sh
-
-# Or uninstall everything including data
-./scripts/uninstall.sh --all
+$ kx import dev-changed.yaml -p dev
+KIND     NAME     EXISTING                     INCOMING
+cluster  eks-dev  https://eks-dev.example.com  https://other.example.com
+kx: 1 conflict in project dev; nothing changed (choose with --on-conflict rename|overwrite|skip)
+$ kx import dev-changed.yaml -p dev --on-conflict=rename
+Project dev updated: added 0, updated 0, renamed 2, skipped 0, dropped 0
 ```
 
-**Default behavior** (`--keep-data`):
-- ✅ Removes installed scripts (`kxconfig`, `kxswap`)
-- ✅ Removes completion script
-- ✅ Removes shell configuration entries
-- ✅ **Keeps** backups in `~/.kube/backups/`
-- ✅ **Keeps** project configs (`~/.kube/config-<name>`)
+## Switching: global and per terminal
 
-**Full removal** (`--all`):
-- ⚠️ Removes everything including backups and project configs
-- ⚠️ Requires confirmation before proceeding
+`kx use PROJECT` switches globally by repointing the `~/.kube/config` symlink. Every terminal and tool sees the change at once.
 
-## 📖 Usage
+`kx shell PROJECT` is the per-terminal alternative. It copies the project to `~/.kube/kx/shells/<pid>-<project>.yaml`, starts `$SHELL` with `KUBECONFIG` pointing at the copy, and removes the copy when you exit. Context and namespace changes made inside it stay in the copy and are discarded on exit, so a prod shell cannot change what your other terminals talk to. Inside it, `kx use`, `kx import --use` and a nested `kx shell` are refused. While the shell runs, Ctrl-C and Ctrl-\ go to the shell only, and a hangup or termination signal is passed on to it; the copy is removed either way. `kx shell` exports `KX_PROJECT=<project>` and `KX_SHELL=1`.
 
-### kxconfig
-
-#### Merge a new kubeconfig
+kx does not edit your shell rc files. To show the project in your prompt, for example in bash:
 
 ```bash
-# Interactive merge (choose project)
-kxconfig -m kubeconfig-dev.yaml
-
-# Merge into a specific project
-kxconfig -p dev -m kubeconfig-dev.yaml
+PS1='${KX_PROJECT:+[$KX_PROJECT] }'$PS1
 ```
 
-#### Replace a master kubeconfig
-
-**Note**: This operation replaces the entire project master file (`~/.kube/config-<name>`), not merges with it.
-
-```bash
-# Replace master kubeconfig (choose project interactively)
-kxconfig -x new-kubeconfig.yaml
-
-# Replace master kubeconfig in a specific project
-kxconfig -p dev -x new-kubeconfig.yaml
-```
-
-#### Remove a context
-
-**Note**: This operation removes contexts from the project master file (`~/.kube/config-<name>`), not from the active `~/.kube/config`.
-
-```bash
-# Remove context (choose project interactively)
-kxconfig -d context-to-remove
-
-# Remove context from a specific project
-kxconfig -p dev -d context-to-remove
-```
-
-#### Combined operations
-
-```bash
-# Merge + Remove
-kxconfig -p dev -m kubeconfig-new.yaml -d unwanted-context
-
-# Replace + Remove
-kxconfig -p dev -x kubeconfig-new.yaml -d unwanted-context
-```
-
-### kxswap
-
-```bash
-# Swap to a specific project
-kxswap dev
-
-# This will:
-# 1. Copy ~/.kube/config-dev to ~/.kube/config
-# 2. Configure the default namespace
-# 3. kubectl/kubectx will now use this project
-```
-
-## 📁 Project Structure
-
-The repository is organized as follows:
-
-```
-kxconfig/
-├── bin/                              # Main executable scripts
-│   ├── kxconfig                      # Main kubeconfig management tool
-│   └── kxswap                        # Quick config swap tool
-├── completions/                      # Shell completion scripts
-│   └── kxconfig-completion.bash
-├── scripts/                          # Installation/uninstallation scripts
-│   ├── install.sh                    # Installation script
-│   └── uninstall.sh                  # Uninstallation script
-├── docs/                             # Documentation
-│   └── CONTRIBUTING.md               # Contribution guidelines
-├── LICENSE                           # License file
-├── README.md                         # This file
-└── release-please-config.json        # Release automation config
-```
-
-## 📁 Kubeconfig File Structure
-
-`kxconfig` organizes kubeconfigs as follows:
-
-```
-~/.kube/
-├── config              # Active kubeconfig (used by kubectl)
-├── config-dev          # Master for "dev" project
-├── config-prod         # Master for "prod" project
-├── config-staging      # Master for "staging" project
-└── backups/
-    ├── config-initial.bak  # Backup of ~/.kube/config from first usage
-    ├── dev.bak         # Backup for "dev" project
-    ├── prod.bak        # Backup for "prod" project
-    └── staging.bak     # Backup for "staging" project
-```
-
-## 📂 Managing Config Files
-
-### Understanding the File Structure
-
-The tool manages two types of kubeconfig files:
-
-1. **Active Config** (`~/.kube/config`): The kubeconfig file currently used by `kubectl`. This is the file that gets read when you run `kubectl` commands.
-
-2. **Project Masters** (`~/.kube/config-<name>`): Master kubeconfig files organized by project. These are managed by `kxconfig` and contain all contexts for a specific project.
-
-### How Files Are Managed
-
-#### First Time Usage
-
-When you use `kxconfig` for the first time (when no projects exist yet):
-- ✅ **Automatic backup**: If `~/.kube/config` exists, it will be automatically backed up to `~/.kube/backups/config-initial.bak`
-- This ensures you can always restore your original configuration
-
-#### Creating Projects
-
-When creating a new project:
-- A new master file is created: `~/.kube/config-<project-name>`
-- The source can be:
-  - A kubeconfig file you provide (via `-m` or `-x`)
-  - Or the current `~/.kube/config` (if you want to import it)
-
-#### Working with Projects
-
-- **`kxconfig`** operates on project master files (`~/.kube/config-<name>`)
-- **`kxswap`** copies a project master to the active config (`~/.kube/config`)
-- Changes made with `kxconfig` are **not** automatically applied to the active config unless you use `kxswap`
-
-### Backup Strategy
-
-The tool maintains backups in `~/.kube/backups/`:
-
-- **`config-initial.bak`**: Created once on first usage, contains your original `~/.kube/config`
-- **`<project>.bak`**: Created/updated before each modification to a project master file
-- Backups are **unique per project** (they overwrite the previous backup)
-
-### Restoring from Backups
-
-If something goes wrong, you can restore from backups:
-
-```bash
-# Restore the initial config
-cp ~/.kube/backups/config-initial.bak ~/.kube/config
-
-# Restore a specific project
-cp ~/.kube/backups/dev.bak ~/.kube/config-dev
-
-# Then apply it
-kxswap dev
-```
-
-### Best Practices
-
-1. **Keep your original config safe**: The initial backup (`config-initial.bak`) is created only once. Keep it safe!
-
-2. **Use descriptive project names**: Choose clear project names (e.g., `dev`, `prod`, `staging`) to easily identify them
-
-3. **Regular backups**: While the tool creates automatic backups, consider making manual backups before major changes:
-   ```bash
-   cp ~/.kube/config-dev ~/.kube/config-dev.manual-backup-$(date +%Y%m%d)
-   ```
-
-4. **Verify before swapping**: Always verify a project config before making it active:
-   ```bash
-   kubectl --kubeconfig=~/.kube/config-dev config get-contexts
-   kxswap dev
-   ```
-
-5. **Clean up old projects**: Remove project files you no longer need:
-   ```bash
-   rm ~/.kube/config-old-project
-   rm ~/.kube/backups/old-project.bak
-   ```
-
-## 🔧 Use Case Examples
-
-### Case 1: Add a new cluster to the development project
-
-```bash
-# Download the new cluster's kubeconfig
-kubectl --kubeconfig=novo-cluster.yaml config view --flatten > novo-cluster.yaml
-
-# Add to dev project
-kxconfig -p dev -m novo-cluster.yaml
-```
-
-### Case 2: Replace a project's master kubeconfig
-
-```bash
-# Replace the entire master kubeconfig for a project
-kxconfig -p dev -x new-kubeconfig.yaml
-```
-
-### Case 3: Clean up old contexts
-
-```bash
-# Remove contexts that are no longer needed
-kxconfig -p dev -d old-cluster-context
-```
-
-### Case 4: Work with multiple projects
-
-```bash
-# Work on dev project
-kxswap dev
-kubectl get pods
-
-# Switch to production
-kxswap prod
-kubectl get pods
-```
-
-## ⚠️ Important Notes
-
-1. **Backups**: 
-   - `kxconfig` automatically creates backups in `~/.kube/backups/<project>.bak` before any changes to project masters
-   - On first usage, if `~/.kube/config` exists, it's backed up to `~/.kube/backups/config-initial.bak`
-   - Backups are unique per project (they overwrite the previous one)
-
-2. **Validation**: All kubeconfigs are validated before processing using `kubectl config view`.
-
-3. **Security**: Kubeconfig files contain sensitive credentials. Make sure you have appropriate permissions configured.
-
-4. **Integration with kxswap**: All `kxconfig` operations are performed on master files (`~/.kube/config-<name>`). If `kxswap` is available in PATH, `kxconfig` will automatically try to apply these changes to the active kubeconfig (`~/.kube/config`) after completing operations.
-
-5. **File Management**: The active config (`~/.kube/config`) and project masters (`~/.kube/config-<name>`) are separate files. Changes to project masters don't affect the active config until you use `kxswap`.
-
-## 🐛 Troubleshooting
-
-### Error: "kubectl not found in PATH"
-
-**Solution**: Install `kubectl` and ensure it's in your PATH.
-
-```bash
-# Check if kubectl is installed
-which kubectl
-
-# If not, install following the official documentation:
-# https://kubernetes.io/docs/tasks/tools/
-```
-
-### Error: "Source file does not exist"
-
-**Solution**: Check the file path and ensure the project exists.
-
-```bash
-# List available projects
-ls ~/.kube/config-*
-
-# Check if the file exists
-ls -la ~/.kube/config-dev
-```
-
-### Error: "kubeconfig appears invalid"
-
-**Solution**: Validate the kubeconfig manually.
-
-```bash
-# Validate kubeconfig
-kubectl --kubeconfig=your-kubeconfig.yaml config view
-
-# If it fails, the file may be corrupted or malformed
-```
-
-### Contexts don't appear after merge
-
-**Solution**: Verify if contexts were actually added.
-
-```bash
-# View contexts in the project
-kubectl --kubeconfig=~/.kube/config-dev config get-contexts
-
-# If needed, merge again
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for more details on how to contribute.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Inspired by the needs of managing multiple Kubernetes clusters
-- Based on best practices for kubeconfig management
-
-## 📝 Changelog
-
-The changelog is automatically generated from commits following the [Conventional Commits](https://www.conventionalcommits.org/) format.
-
-See [releases](https://github.com/nunoarmada/kxconfig/releases) for the complete version history.
-
-### Version 1.0.0
-- Initial functionality
-- Support for merge, replace and delete contexts
-- Integration with kxswap
-- Automatic backups
-- Initial config backup on first usage
-
----
-
-**Developed with ❤️ for the Kubernetes community**
+or in zsh: `PROMPT='${KX_PROJECT:+[$KX_PROJECT] }'$PROMPT`.
+
+### Environment variables
+
+| Variable | Effect |
+|---|---|
+| `KX_HOME` | directory that holds the kubeconfig files and the `kx/` state; default `~/.kube` |
+| `KX_ASCII=1` | use plain ASCII instead of Unicode glyphs in the UI |
+| `NO_COLOR` | turn colours off in the UI |
+| `KX_PROJECT`, `KX_SHELL` | set by `kx shell`; read-only for you |
+
+## Safety
+
+- **Merge conflicts.** Importing compares clusters, users and contexts by name. Same name and same content is a no-op; same name and different content is a conflict. The CLI default `--on-conflict fail` prints the conflicts and changes nothing. `rename` adds a suffix (`-2`, `-3`, ...) to the incoming entry and rewrites the contexts that refer to it, `overwrite` lets the incoming entry win, `skip` keeps the existing one. Overwriting a cluster or user re-points every existing context that uses it and that the file does not replace: those contexts then talk to the incoming server or use the incoming credentials. kx lists them and asks for confirmation (`--yes` when there is no terminal; the TUI asks on its conflict screen) before writing anything. The TUI shows a conflict screen where you choose per entry or for all. It never shows secret values. The project's `current-context` is kept on merge and taken from the file on `--replace`.
+- **Dropped contexts.** An incoming context that refers to a cluster or user that was skipped or is missing is not merged. The import summary counts these as `dropped` and names each one.
+- **Backups.** A backup is taken before every change to a project except `kx ctx` and `kx ns` (and the TUI actions that do the same), which change a single field and are not backed up; everything else is, including opening a project in `$EDITOR` from the TUI. Backups live in `~/.kube/kx/backups/<project>/`, and the newest 20 per project are kept. `kx backups` lists them and `kx restore` brings one back. Deleting a project keeps its backups. The `_initial` backups of an original `~/.kube/config` are never pruned; bring one back with `kx restore --initial --as NAME`.
+- **Concurrent writers.** Changes read the project file once, back up exactly those bytes, refuse an empty file and take the client-go lock file `<file>.lock` while writing; for the active project they also take `~/.kube/config.lock`, the one kubectl takes. If another process holds it kx waits about a second and then fails; it never removes a lock itself.
+- **`KUBECONFIG`.** kubectl reads `$KUBECONFIG` when it is set, not the kx project. Outside a kx shell, `kx ctx`, `kx ns` and the TUI warn when it is set to something other than the kx config or project file, since the change would not reach kubectl in that terminal.
+- **Permissions.** Project files, backups and state are written atomically with mode `0600` (directories `0700`). `kx doctor` reports files that are more open than that, a broken or foreign `~/.kube/config`, and invalid project files; `kx doctor --fix` repairs permissions and stale shell copies.
+- **Deleting contexts.** `kx rm-ctx` also removes the cluster and user that no other context in that file uses, so credentials do not linger; `--keep-orphans` turns that off. It only touches the named project.
+- **Namespaces.** Switching project never changes a namespace; only `kx ns` or the UI does.
+
+## Migrating from 1.x
+
+| 1.x | 2.x |
+|---|---|
+| `kxswap dev` | `kx use dev` |
+| `kxconfig -p dev -m file.yaml` | `kx import file.yaml -p dev` |
+| `kxconfig -p dev -x file.yaml` | `kx import file.yaml -p dev --replace` |
+| `kxconfig -p dev -d ctx` | `kx rm-ctx ctx -p dev` |
+
+- Your `~/.kube/config-<project>` files keep working as projects. Existing `~/.kube/backups/*.bak` files from 1.x are left untouched; kx backups live in `~/.kube/kx/backups/`.
+- 1.x copied the project file over `~/.kube/config`. kx makes `~/.kube/config` a symlink. The first `kx use` on a machine where `~/.kube/config` is a regular file backs it up to `~/.kube/kx/backups/_initial/`. If it holds the same kubeconfig as a project file (compared by content, not by bytes: an imported and re-saved copy still matches) kx just links it. Otherwise it stops and asks you to choose: `kx use PROJECT --adopt NAME` keeps the file as a new project `NAME`, `kx use PROJECT --adopt-replace` replaces it with the link. The TUI asks the same question. If `~/.kube/config` is a symlink to something that is not a kx project, kx refuses to touch it.
+- The 1.x scripts are gone, so remove any `kxconfig`/`kxswap` aliases and the old completion line from your shell rc files.
+- The Go module is now `github.com/nunoarmada/kxconfig/v2` and release tags are `vX.Y.Z` (they were `kxconfig-vX.Y.Z`).
+
+## License
+
+[MIT](LICENSE)

@@ -1,48 +1,62 @@
-name: release-please
+name: release
 
+# GoReleaser runs in this workflow, not in a separate one: events created with
+# GITHUB_TOKEN (the release and its tag) do not trigger other workflows.
+# Releases are cut from main only when the release PR is merged; the commits it
+# releases already passed CI on their own PRs and pushes to main.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
-    branches:
-      - main
+  push:
+    branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
-  actions: read
+permissions: {}
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# Third-party actions are pinned to full commit SHAs (the goreleaser job holds
+# HOMEBREW_TAP_TOKEN); the comment names the release each SHA is. Update them
+# deliberately, checking the tag with git ls-remote.
 jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
-    # Only run if the triggering workflow succeeded
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - uses: googleapis/release-please-action@v4
-        id: release
+      - id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Upload Release Assets
-        if: ${{ steps.release.outputs.release_created }}
-        uses: softprops/action-gh-release@v1
+  goreleaser:
+    name: GoReleaser
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          tag_name: ${{ steps.release.outputs.tag_name }}
-          draft: false
-          prerelease: false
-          files: |
-            bin/kxconfig
-            bin/kxswap
-            scripts/install.sh
-            scripts/uninstall.sh
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

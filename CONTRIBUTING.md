@@ -1,90 +1,56 @@
-# Contributing Guide
+# Contributing
 
-Thank you for considering contributing to `kxconfig`! This document provides guidelines for contributions.
+Thank you for considering a contribution to `kx`.
 
-## 📋 How to Contribute
+## Reporting bugs and suggesting features
 
-### Reporting Bugs
+Open an [issue](https://github.com/nunoarmada/kxconfig/issues) after checking that none exists yet. For a bug, include the `kx version` output, your OS, the steps to reproduce, and what you expected. Never paste kubeconfig contents with tokens or certificates.
 
-If you find a bug, please:
+## Development setup
 
-1. Check if the bug hasn't already been reported in [Issues](https://github.com/nunoarmada/kxconfig/issues)
-2. Create a new issue with:
-   - Clear description of the problem
-   - Steps to reproduce
-   - Expected behavior vs. current behavior
-   - Bash and kubectl version
-   - Operating system
+You need the Go toolchain version in `go.mod` (the `toolchain` line; Go downloads it for you if your `go` is newer than 1.21) and [golangci-lint](https://golangci-lint.run/) v2.
 
-### Suggesting Features
+```bash
+git clone https://github.com/nunoarmada/kxconfig.git
+cd kxconfig
+go build -o kx ./cmd/kx
+```
 
-We'd love to hear your ideas! To suggest a new feature:
+Layout: `cmd/kx` is the entry point, `internal/cli` the cobra commands, `internal/tui` the Bubble Tea UI, and `internal/store`, `internal/kubecfg`, `internal/backup` the logic they share.
 
-1. Check if a similar issue doesn't already exist
-2. Create a new issue with:
-   - Clear description of the feature
-   - Use cases and examples
-   - Benefits for users
+## Test and lint
 
-### Contributing Code
+Run these before opening a pull request; CI runs the same on Linux and macOS.
 
-#### Environment Setup
+```bash
+go vet ./...
+go test -race ./...
+golangci-lint run ./...
+go build ./cmd/kx
+```
 
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/nunoarmada/kxconfig.git
-   cd kxconfig
-   ```
+Tests that touch the file system use a temporary `KX_HOME`; never point a test at your real `~/.kube`. Write a failing test first for new behaviour and bug fixes.
 
-#### Development Process
+To try a change safely by hand:
 
-1. Create a branch for your feature/fix:
-   ```bash
-   git checkout -b feature/my-feature
-   # or
-   git checkout -b fix/bug-fix
-   ```
+```bash
+export KX_HOME=$(mktemp -d)
+go run ./cmd/kx import some-kubeconfig.yaml -p demo
+go run ./cmd/kx
+```
 
-2. Make the necessary changes
+The release configuration can be checked with `goreleaser check` (exit code 2 is expected: it reports the deprecated `brews` section) and `goreleaser release --snapshot --clean`.
 
-3. Test your changes:
-   ```bash
-   # Test scripts manually
-   ./kxconfig --help
-   ./kxswap dev
-   ```
+## Pull requests
 
-4. Ensure the code follows conventions:
-   - Use `set -euo pipefail` in bash scripts
-   - Keep error messages clear and informative
-   - Add comments when necessary
-   - Follow existing code style
+1. Branch from `main` (`feat/...`, `fix/...`).
+2. Keep the change focused; do not mix refactors with behaviour changes.
+3. Update the README when commands, keys or behaviour change.
+4. Do not edit `CHANGELOG.md`; release-please writes it.
 
-5. Commit your changes:
-   ```bash
-   git add .
-   git commit -m "Clear description of the change"
-   ```
+## Commit messages
 
-6. Push to your fork:
-   ```bash
-   git push origin feature/my-feature
-   ```
-
-7. Open a Pull Request in the original repository
-
-#### Code Conventions
-
-- **Bash**: Use `set -euo pipefail` and `IFS=$'\n\t'`
-- **Variable names**: UPPERCASE for global variables
-- **Functions**: Descriptive names in lowercase with hyphens
-- **Messages**: In English for user-facing messages
-- **Comments**: In English, clear and concise
-
-#### Commit Conventions
-
-This project uses [Conventional Commits](https://www.conventionalcommits.org/) to automate releases. Please use the following format:
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/); release-please builds the changelog and picks the version from them.
 
 ```
 <type>(<scope>): <description>
@@ -94,82 +60,14 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) t
 [optional footer]
 ```
 
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Formatting, semicolons, etc. (doesn't affect code)
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `test`: Adding or fixing tests
-- `chore`: Maintenance tasks (dependencies, build, etc.)
+Types: `feat` (minor bump), `fix` (patch bump), `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`. A `!` after the type or a `BREAKING CHANGE:` footer means a major bump.
 
-**Examples:**
 ```
-feat(kxconfig): add support for listing projects
-fix(kxswap): fix validation of invalid kubeconfig
-docs(readme): update installation instructions
+feat(cli): add --output json to kx backups
+fix(kubecfg): keep extensions when renaming a cluster
+docs(readme): document KX_ASCII
 ```
 
-**Note**: Commits following the conventional commits format automatically generate releases and changelogs.
+## Releases
 
-#### Example Script Structure
-
-```bash
-#!/usr/bin/env bash
-
-set -euo pipefail
-IFS=$'\n\t'
-
-# Global variables
-SCRIPT_NAME="$(basename "$0")"
-BASE_DIR="${HOME}/.kube"
-
-# Helper functions
-log() {
-  echo "[$SCRIPT_NAME] $*"
-}
-
-err() {
-  echo "[$SCRIPT_NAME] ERROR: $*" >&2
-}
-
-# Main function
-main() {
-  # code here
-}
-
-main "$@"
-```
-
-### Pull Request Review
-
-- All PRs will be reviewed
-- You may be asked to make changes before merging
-- Keep PRs focused on a single change when possible
-
-## 📝 Pull Request Checklist
-
-Before submitting a PR, ensure that:
-
-- [ ] The code works correctly
-- [ ] You tested the changes manually
-- [ ] You follow code conventions
-- [ ] You added comments when necessary
-- [ ] You updated documentation if necessary
-- [ ] Commit messages are clear and descriptive
-
-## 🎯 Areas Where We Need Help
-
-- Automated tests
-- Documentation improvements
-- Support for more operating systems
-- Additional features (see issues)
-
-## 📞 Contact
-
-If you have questions, you can:
-- Open an issue
-- Create a discussion on GitHub
-
-Thank you for contributing! 🎉
+Merging the release PR that release-please opens on `main` creates the `vX.Y.Z` tag and GitHub release; the same workflow then runs GoReleaser to attach the binaries and update the Homebrew formula. It needs the `HOMEBREW_TAP_TOKEN` repository secret.

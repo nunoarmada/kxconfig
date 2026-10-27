@@ -1,13 +1,11 @@
 {
-    "packages": {
-        ".": {
-            "release-type": "simple",
-            "package-name": "kxconfig",
-            "extra-files": [
-                "kxconfig",
-                "kxswap"
-            ]
-        }
-    },
-    "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "last-release-sha": "0e8fae99677513a634d2a9198e1cb5a1366d3639",
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
 }

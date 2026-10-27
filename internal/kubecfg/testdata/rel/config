@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Config
+current-context: rel
+clusters:
+- name: rel
+  cluster:
+    server: https://rel.example:6443
+    certificate-authority: ca.crt
+users:
+- name: rel
+  user:
+    token: tok
+contexts:
+- name: rel
+  context:
+    cluster: rel
+    user: rel
