@@ -78,12 +78,16 @@ func resolveTarget(path string) (string, error) {
 }
 
 // CopyFile copies src to dst atomically; dst ends up with mode 0600.
-func CopyFile(src, dst string) error {
+func CopyFile(src, dst string) (err error) {
 	f, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close %s: %w", src, cerr)
+		}
+	}()
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", src, err)

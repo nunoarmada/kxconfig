@@ -115,3 +115,27 @@ func TestTooOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteFileAtomicFollowsRelativeSymlink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(dir, "sub", "b")
+	if err := os.WriteFile(b, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := filepath.Join(dir, "a")
+	if err := os.Symlink(filepath.Join("sub", "b"), a); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFileAtomic(a, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	if li, err := os.Lstat(a); err != nil || li.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("a is no longer a symlink: %v %v", li, err)
+	}
+	if got, _ := os.ReadFile(b); string(got) != "new" {
+		t.Fatalf("b content = %q", got)
+	}
+}
