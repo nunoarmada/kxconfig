@@ -3,12 +3,17 @@
 package fsutil
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+// LockWait is how long WithLock keeps retrying a lock held by someone else.
+var LockWait = time.Second
 
 // WriteFileAtomic writes data to path via a temp file in the same directory
 // (chmod 0600, fsync, rename). If path is a symlink, the resolved target is
@@ -114,4 +119,29 @@ func EnsureDir(dir string) error {
 // TooOpen reports whether mode grants any permission to group or others.
 func TooOpen(mode fs.FileMode) bool {
 	return mode.Perm()&0o077 != 0
+}
+
+// WithLock runs fn while holding the client-go compatible lock file
+// path+".lock" (created with O_EXCL, removed afterwards), so kx and kubectl
+// do not write the same kubeconfig at the same time. A held lock is retried
+// for LockWait and then reported as an error; it is never removed by force.
+func WithLock(path string, fn func() error) error {
+	lock := path + ".lock"
+	deadline := time.Now().Add(LockWait)
+	for {
+		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_ = f.Close()
+			break
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return fmt.Errorf("lock %s: %w", path, err)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s is locked by another process (kubectl?); retry, or remove %s if it is stale", path, lock)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	defer func() { _ = os.Remove(lock) }()
+	return fn()
 }

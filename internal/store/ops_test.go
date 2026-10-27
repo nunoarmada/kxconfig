@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nunoarmada/kxconfig/v2/internal/backup"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
 	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 )
 
@@ -583,7 +585,7 @@ func TestSetNamespaceDoesNotBackup(t *testing.T) {
 
 // failCreate makes every new backup fail while existing ones stay readable.
 func failCreate(s *Store) {
-	s.create = func(project, op, src string) (backup.Backup, error) {
+	s.create = func(project, op string, data []byte) (backup.Backup, error) {
 		return backup.Backup{}, errors.New("disk full")
 	}
 }
@@ -619,9 +621,9 @@ func TestRestoreAndRenameAbortWhenBackupFails(t *testing.T) {
 func TestImportPruneFailureIsWarning(t *testing.T) {
 	s := newStore(t)
 	addProject(t, s, "dev", mkCfg("a", "ca", "https://a", "ua", "t1"))
-	real := s.Backups.Create
-	s.create = func(project, op, src string) (backup.Backup, error) {
-		b, err := real(project, op, src)
+	real := s.Backups.CreateData
+	s.create = func(project, op string, data []byte) (backup.Backup, error) {
+		b, err := real(project, op, data)
 		if err != nil {
 			return b, err
 		}
@@ -674,5 +676,220 @@ func TestTargetInShellRejectsForeignKubeconfig(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "KUBECONFIG was changed") {
 			t.Errorf("Kubeconfig %q: err = %v", kc, err)
 		}
+	}
+}
+
+// rawCfgWithCA is a master whose cluster references ca.crt by relative path.
+func rawCfgWithCA(ca string) string {
+	return "apiVersion: v1\nkind: Config\ncurrent-context: a\nclusters:\n- name: ca\n  cluster:\n    server: https://a\n    certificate-authority: " + ca +
+		"\ncontexts:\n- name: a\n  context:\n    cluster: ca\n    user: ua\nusers:\n- name: ua\n  user:\n    token: t1\n"
+}
+
+func TestImportMergeKeepsMasterFileReferences(t *testing.T) {
+	s := newStore(t)
+	writeFile(t, filepath.Join(s.Root, "ca.crt"), "CA", 0o600)
+	addProject(t, s, "dev", rawCfgWithCA("ca.crt"))
+	in := writeIncoming(t, mkCfg("b", "cb", "https://b", "ub", "t2"))
+	if _, err := s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	got := readFile(t, s.ProjectPath("dev"))
+	if !strings.Contains(got, "certificate-authority: ca.crt") || strings.Contains(got, "certificate-authority-data") {
+		t.Fatalf("untouched master entry was flattened:\n%s", got)
+	}
+	if !strings.Contains(got, "name: cb") {
+		t.Fatalf("incoming not merged:\n%s", got)
+	}
+}
+
+func TestImportSameContentDifferentFormNoChange(t *testing.T) {
+	s := newStore(t)
+	writeFile(t, filepath.Join(s.Root, "ca.crt"), "CA", 0o600)
+	addProject(t, s, "dev", rawCfgWithCA("ca.crt"))
+	// The same cluster with the CA inlined is not a conflict nor a change.
+	in := writeIncoming(t, "apiVersion: v1\nkind: Config\nclusters:\n- name: ca\n  cluster:\n    server: https://a\n    certificate-authority-data: Q0E=\n")
+	res, err := s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Changed || backupCount(t, s, "dev") != 0 {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+func TestImportMasterWithDanglingCAStillImports(t *testing.T) {
+	s := newStore(t)
+	addProject(t, s, "dev", rawCfgWithCA("gone.crt"))
+	in := writeIncoming(t, mkCfg("b", "cb", "https://b", "ub", "t2"))
+	res, err := s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if !res.Changed {
+		t.Fatalf("result = %+v", res)
+	}
+	got := readFile(t, s.ProjectPath("dev"))
+	if !strings.Contains(got, "certificate-authority: gone.crt") || !strings.Contains(got, "name: cb") {
+		t.Fatalf("unexpected project:\n%s", got)
+	}
+	if cs, err := s.PreviewImport(in, "dev"); err != nil || len(cs) != 0 {
+		t.Fatalf("PreviewImport = %v, %v", cs, err)
+	}
+}
+
+func TestPreviewMergeReportsReboundAndWritesNothing(t *testing.T) {
+	s := newStore(t)
+	master := mkCfg("a", "shared", "https://old", "ua", "t1")
+	addProject(t, s, "dev", master)
+	in := writeIncoming(t, mkCfg("b", "shared", "https://new", "ub", "t2"))
+	rep, err := s.PreviewMerge(in, "dev", kubecfg.MergeOptions{Default: kubecfg.PolicyOverwrite})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []kubecfg.EntityRef{{Kind: kubecfg.KindContext, Name: "a"}}
+	if len(rep.Rebound) != 1 || rep.Rebound[0] != want[0] {
+		t.Fatalf("Rebound = %v, want %v", rep.Rebound, want)
+	}
+	if readFile(t, s.ProjectPath("dev")) != master || backupCount(t, s, "dev") != 0 {
+		t.Fatal("preview wrote something")
+	}
+	if _, err := s.PreviewMerge(in, "dev", kubecfg.MergeOptions{}); !errors.Is(err, kubecfg.ErrConflicts) {
+		t.Fatalf("err = %v, want ErrConflicts", err)
+	}
+	rep, err = s.PreviewMerge(in, "nope", kubecfg.MergeOptions{})
+	if err != nil || len(rep.Added) == 0 {
+		t.Fatalf("new project: %+v, %v", rep, err)
+	}
+}
+
+func TestEmptyProjectFileIsRefused(t *testing.T) {
+	s := newStore(t)
+	writeFile(t, s.ProjectPath("dev"), "", 0o600)
+	tgt := Target{Path: s.ProjectPath("dev"), Project: "dev"}
+	in := writeIncoming(t, mkCfg("b", "cb", "https://b", "ub", "t2"))
+	checks := map[string]error{}
+	_, checks["import"] = s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{})
+	_, checks["rmctx"] = s.RemoveContext("dev", "a", false)
+	checks["ctx"] = s.SetContext(tgt, "a")
+	checks["ns"] = s.SetNamespace(tgt, "x")
+	for op, err := range checks {
+		if !errors.Is(err, ErrEmptyProject) {
+			t.Errorf("%s: err = %v, want ErrEmptyProject", op, err)
+		}
+	}
+	if readFile(t, s.ProjectPath("dev")) != "" || backupCount(t, s, "dev") != 0 {
+		t.Fatal("empty file was touched or backed up")
+	}
+}
+
+func TestRestoreRecoversEmptyProjectFile(t *testing.T) {
+	s := newStore(t)
+	want := mkCfg("a", "ca", "https://a", "ua", "t1")
+	addProject(t, s, "dev", want)
+	bk, err := s.Backups.Create("dev", "import", s.ProjectPath("dev"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, s.ProjectPath("dev"), "", 0o600) // truncated by something else
+	if err := s.Restore("dev", bk.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, s.ProjectPath("dev")); got != want {
+		t.Fatalf("restored = %q", got)
+	}
+}
+
+func TestOperationsFailWhenLockIsHeld(t *testing.T) {
+	old := fsutil.LockWait
+	fsutil.LockWait = 40 * time.Millisecond
+	defer func() { fsutil.LockWait = old }()
+	s := newStore(t)
+	orig := mkCfg("a", "ca", "https://a", "ua", "t1")
+	addProject(t, s, "dev", orig)
+	bk, _ := s.Backups.Create("dev", "import", s.ProjectPath("dev"))
+	writeFile(t, s.ProjectPath("dev")+".lock", "", 0o600)
+	tgt := Target{Path: s.ProjectPath("dev"), Project: "dev"}
+	in := writeIncoming(t, mkCfg("b", "cb", "https://b", "ub", "t2"))
+
+	checks := map[string]error{}
+	_, checks["import"] = s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{})
+	_, checks["rmctx"] = s.RemoveContext("dev", "a", false)
+	checks["ctx"] = s.SetContext(tgt, "a")
+	checks["ns"] = s.SetNamespace(tgt, "x")
+	checks["restore"] = s.Restore("dev", bk.ID)
+	for op, err := range checks {
+		if err == nil || !strings.Contains(err.Error(), ".lock") {
+			t.Errorf("%s: err = %v, want a lock error", op, err)
+		}
+	}
+	if readFile(t, s.ProjectPath("dev")) != orig {
+		t.Fatal("project changed while locked")
+	}
+}
+
+func TestLockFileIsRemovedAfterWrite(t *testing.T) {
+	s := newStore(t)
+	addProject(t, s, "dev", mkCfg("a", "ca", "https://a", "ua", "t1"))
+	if err := s.SetNamespace(Target{Path: s.ProjectPath("dev"), Project: "dev"}, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(s.ProjectPath("dev") + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock file left behind: %v", err)
+	}
+}
+
+func TestImportBacksUpTheBytesItParsed(t *testing.T) {
+	s := newStore(t)
+	orig := mkCfg("a", "ca", "https://a", "ua", "t1")
+	addProject(t, s, "dev", orig)
+	var saw []byte
+	real := s.Backups.CreateData
+	s.create = func(project, op string, data []byte) (backup.Backup, error) {
+		saw = data
+		return real(project, op, data)
+	}
+	in := writeIncoming(t, mkCfg("b", "cb", "https://b", "ub", "t2"))
+	if _, err := s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if string(saw) != orig {
+		t.Fatalf("backup bytes = %q, want the original file", saw)
+	}
+}
+
+func TestRestoreInitialWritesNewProject(t *testing.T) {
+	s := newStore(t)
+	orig := mkCfg("a", "ca", "https://a", "ua", "t1")
+	writeFile(t, s.ConfigPath(), orig, 0o600)
+	addProject(t, s, "dev", validCfg)
+	if err := s.AdoptForeign(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Use("dev"); err != nil {
+		t.Fatal(err)
+	}
+	bs, _ := s.Backups.List("_initial")
+	if len(bs) != 1 {
+		t.Fatalf("setup: %v", bs)
+	}
+	// Refusals: bad name, existing project, unknown id.
+	if err := s.RestoreInitial("", "../x"); !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("err = %v, want ErrInvalidName", err)
+	}
+	if err := s.RestoreInitial("", "dev"); !errors.Is(err, ErrExists) {
+		t.Fatalf("err = %v, want ErrExists", err)
+	}
+	if err := s.RestoreInitial("nope", "old"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want not-exist", err)
+	}
+	if err := s.RestoreInitial("", "old"); err != nil { // latest
+		t.Fatal(err)
+	}
+	if got := readFile(t, s.ProjectPath("old")); got != orig {
+		t.Fatalf("restored = %q", got)
+	}
+	assertState(t, s, "dev", LinkOK) // never touches the active link
+	if err := s.RestoreInitial(bs[0].ID, "old2"); err != nil {
+		t.Fatal(err)
 	}
 }

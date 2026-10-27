@@ -10,13 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/nunoarmada/kxconfig/v2/internal/backup"
 	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
 	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 )
-
-// initialProject is the backup namespace for adopted ~/.kube/config files. It
-// is deliberately not a valid project name.
-const initialProject = "_initial"
 
 // LinkState describes what <root>/config currently is.
 type LinkState int
@@ -117,7 +116,7 @@ func (s *Store) Use(name string) error {
 		}
 		// Use has no result to carry a warning; a failed prune only leaves
 		// old backups behind and the new one exists, so ignoring it is safe.
-		if _, _, err := s.backup(initialProject, "adopt", s.ConfigPath()); err != nil {
+		if _, _, err := s.backup(backup.InitialProject, "adopt", s.ConfigPath()); err != nil {
 			return err
 		}
 	}
@@ -133,14 +132,20 @@ func (s *Store) Use(name string) error {
 	return nil
 }
 
-// matchesAnyProject reports whether <root>/config is byte-identical to the
-// preferred project file or to any other valid project file.
+// matchesAnyProject reports whether <root>/config holds the same kubeconfig
+// as the preferred project file or any other valid project file. Files are
+// compared semantically (formatting, comments and the spelling of file
+// references do not matter), because importing re-serialises a config.
 func (s *Store) matchesAnyProject(preferred string) (bool, error) {
-	cfg, err := os.ReadFile(s.ConfigPath())
+	data, err := os.ReadFile(s.ConfigPath())
 	if err != nil {
 		return false, err
 	}
-	if same, err := sameContent(preferred, cfg); err != nil || same {
+	cfg, err := kubecfg.LoadBytes(data, s.ConfigPath())
+	if err != nil {
+		cfg = nil // unparsable: only a byte-identical project can match
+	}
+	if same, err := sameContent(preferred, data, cfg); err != nil || same {
 		return same, err
 	}
 	ps, err := s.Projects()
@@ -151,19 +156,31 @@ func (s *Store) matchesAnyProject(preferred string) (bool, error) {
 		if p.Err != nil || p.Path == preferred {
 			continue
 		}
-		if same, err := sameContent(p.Path, cfg); err != nil || same {
+		if same, err := sameContent(p.Path, data, cfg); err != nil || same {
 			return same, err
 		}
 	}
 	return false, nil
 }
 
-func sameContent(path string, want []byte) (bool, error) {
+// sameContent reports whether the project at path is byte-identical to want
+// or, when want parsed as cfg, holds the same kubeconfig.
+func sameContent(path string, want []byte, cfg *api.Config) (bool, error) {
 	got, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
 	}
-	return bytes.Equal(got, want), nil
+	if bytes.Equal(got, want) {
+		return true, nil
+	}
+	if cfg == nil {
+		return false, nil
+	}
+	proj, err := kubecfg.LoadBytes(got, path)
+	if err != nil {
+		return false, nil
+	}
+	return sameConfig(cfg, proj)
 }
 
 // swapLink atomically points <root>/config at target: the new link is created
@@ -180,7 +197,7 @@ func (s *Store) swapLink(target string) error {
 	return nil
 }
 
-// AdoptForeign backs up a foreign <root>/config to the "_initial" backup
+// AdoptForeign backs up a foreign <root>/config to the backup.InitialProject backup
 // project, optionally keeps it as the new project importAs, and removes it so
 // Use can link in its place. The file is never removed without a backup.
 func (s *Store) AdoptForeign(importAs string) error {
@@ -202,7 +219,7 @@ func (s *Store) AdoptForeign(importAs string) error {
 		}
 	}
 	// Same as in Use: the prune warning is safe to ignore.
-	if _, _, err := s.backup(initialProject, "adopt", s.ConfigPath()); err != nil {
+	if _, _, err := s.backup(backup.InitialProject, "adopt", s.ConfigPath()); err != nil {
 		return err
 	}
 	if importAs != "" {

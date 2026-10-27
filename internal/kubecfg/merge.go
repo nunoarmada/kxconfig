@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -398,32 +397,23 @@ func entity(c *api.Config, k Kind, name string) (any, bool) {
 // entity compares equal to its flattened twin. An entity that cannot be
 // flattened (no origin, or a file that is missing) is returned raw.
 func flatEntity(c *api.Config, k Kind, name string) (any, bool) {
-	raw, ok := entity(c, k, name)
-	if !ok || k == KindContext {
-		return raw, ok
-	}
-	tmp := api.NewConfig()
 	switch k {
 	case KindCluster:
-		if c.Clusters[name].LocationOfOrigin == "" {
-			return raw, true
+		if v := c.Clusters[name]; v != nil {
+			v = flatCluster(v)
+			v.LocationOfOrigin = ""
+			return v, true
 		}
-		tmp.Clusters[name] = c.Clusters[name].DeepCopy()
+		return nil, false
 	case KindUser:
-		if c.AuthInfos[name].LocationOfOrigin == "" {
-			return raw, true
+		if v := c.AuthInfos[name]; v != nil {
+			v = flatUser(v)
+			v.LocationOfOrigin = ""
+			return v, true
 		}
-		tmp.AuthInfos[name] = c.AuthInfos[name].DeepCopy()
+		return nil, false
 	}
-	if clientcmd.ResolveLocalPaths(tmp) != nil || api.FlattenConfig(tmp) != nil {
-		return raw, true
-	}
-	if k == KindCluster {
-		tmp.Clusters[name].LocationOfOrigin = ""
-		return tmp.Clusters[name], true
-	}
-	tmp.AuthInfos[name].LocationOfOrigin = ""
-	return tmp.AuthInfos[name], true
+	return entity(c, k, name)
 }
 
 func put(c *api.Config, k Kind, name string, e any) {

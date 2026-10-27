@@ -127,3 +127,15 @@ func TestPreviousEmpty(t *testing.T) {
 		t.Fatalf("Previous() = %q, %v", p, err)
 	}
 }
+
+func TestDefaultRootIsAbsolute(t *testing.T) {
+	t.Setenv("KX_HOME", "rel/kxhome")
+	got, err := DefaultRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := filepath.Abs("rel/kxhome")
+	if got != want || !filepath.IsAbs(got) {
+		t.Fatalf("DefaultRoot() = %q, want %q", got, want)
+	}
+}

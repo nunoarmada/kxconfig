@@ -54,18 +54,52 @@ func classifyBackup(b backup.Backup, err error) (backup.Backup, string, error) {
 	}
 }
 
-// backup is the single entry point for taking a backup before a change. See
-// classifyBackup for the contract; warn is a non-fatal message.
+// backup takes a backup of the file at src. See classifyBackup for the
+// contract; warn is a non-fatal message.
 func (s *Store) backup(project, op, src string) (b backup.Backup, warn string, err error) {
-	create := s.Backups.Create
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return backup.Backup{}, "", fmt.Errorf("back up %s: %w", src, err)
+	}
+	return s.backupData(project, op, data, src)
+}
+
+// backupData is the single entry point for taking a backup before a change,
+// of exactly the bytes the caller read (and parsed) from src.
+func (s *Store) backupData(project, op string, data []byte, src string) (b backup.Backup, warn string, err error) {
+	create := s.Backups.CreateData
 	if s.create != nil {
 		create = s.create
 	}
-	b, warn, err = classifyBackup(create(project, op, src))
+	b, warn, err = classifyBackup(create(project, op, data))
 	if err != nil {
 		return backup.Backup{}, "", fmt.Errorf("back up %s: %w", src, err)
 	}
 	return b, warn, nil
+}
+
+// readProjectFile reads path once. A zero-length file is refused: it is what
+// a concurrent writer leaves behind, and merging into it would silently
+// replace the project.
+func readProjectFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("%s: %w", path, ErrEmptyProject)
+	}
+	return data, nil
+}
+
+// BackupProject takes a backup of project's master file under op (for example
+// "edit", before an external editor changes it). warn is a non-fatal message
+// (pruning old backups failed).
+func (s *Store) BackupProject(project, op string) (backup.Backup, string, error) {
+	if err := ValidateName(project); err != nil {
+		return backup.Backup{}, "", err
+	}
+	return s.backup(project, op, s.ProjectPath(project))
 }
 
 // ImportMode selects how Import combines the incoming file with a project.
@@ -137,48 +171,57 @@ func (s *Store) Import(file, project string, mode ImportMode, opts kubecfg.Merge
 		return res, nil
 	}
 
-	// Flattened so entities compare equal to the (flattened) incoming ones.
-	master, err := kubecfg.LoadFlattened(path)
-	if err != nil {
-		return res, fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
-	}
-	result := incoming
-	op := "replace"
-	if mode == ImportMerge {
-		op = "import"
-		result, res.Report, err = kubecfg.Merge(master, incoming, opts)
+	// The merge result is built from the raw master so untouched entries
+	// keep their file references; flattened copies are only used to compare.
+	return res, fsutil.WithLock(path, func() error {
+		data, err := readProjectFile(path)
 		if err != nil {
-			return res, err
+			return err
 		}
-	}
-	same, err := sameConfig(master, result)
-	if err != nil {
-		return res, err
-	}
-	if same {
-		return res, nil
-	}
-	b, warn, err := s.backup(project, op, path)
-	if err != nil {
-		return res, err
-	}
-	res.Backup = &b
-	if warn != "" {
-		res.Warnings = append(res.Warnings, warn)
-	}
-	if err := kubecfg.Save(result, path); err != nil {
-		return res, err
-	}
-	res.Changed = true
-	return res, nil
+		master, err := kubecfg.LoadBytes(data, path)
+		if err != nil {
+			return fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
+		}
+		result := incoming
+		op := "replace"
+		if mode == ImportMerge {
+			op = "import"
+			result, res.Report, err = kubecfg.Merge(master, incoming, opts)
+			if err != nil {
+				return err
+			}
+		}
+		same, err := sameConfig(master, result)
+		if err != nil {
+			return err
+		}
+		if same {
+			return nil
+		}
+		b, warn, err := s.backupData(project, op, data, path)
+		if err != nil {
+			return err
+		}
+		res.Backup = &b
+		if warn != "" {
+			res.Warnings = append(res.Warnings, warn)
+		}
+		if err := kubecfg.Save(result, path); err != nil {
+			return err
+		}
+		res.Changed = true
+		return nil
+	})
 }
 
+// sameConfig reports whether a and b hold the same kubeconfig, ignoring how
+// file references are spelled.
 func sameConfig(a, b *api.Config) (bool, error) {
-	ab, err := clientcmd.Write(*a)
+	ab, err := clientcmd.Write(*kubecfg.FlattenedCopy(a))
 	if err != nil {
 		return false, err
 	}
-	bb, err := clientcmd.Write(*b)
+	bb, err := clientcmd.Write(*kubecfg.FlattenedCopy(b))
 	if err != nil {
 		return false, err
 	}
@@ -188,22 +231,50 @@ func sameConfig(a, b *api.Config) (bool, error) {
 // PreviewImport lists the conflicts a merge of file into project would hit.
 // A project that does not exist yet has none.
 func (s *Store) PreviewImport(file, project string) ([]kubecfg.Conflict, error) {
-	if err := ValidateName(project); err != nil {
+	incoming, master, err := s.previewInputs(file, project)
+	if err != nil || master == nil {
 		return nil, err
 	}
-	incoming, err := kubecfg.LoadFlattened(file)
+	return kubecfg.DetectConflicts(master, incoming), nil
+}
+
+// PreviewMerge runs the merge of file into project in memory and returns its
+// report; nothing is written and no backup is taken. Like Import, conflicts
+// that resolve to PolicyFail return an error wrapping kubecfg.ErrConflicts
+// with the report filled in.
+func (s *Store) PreviewMerge(file, project string, opts kubecfg.MergeOptions) (kubecfg.MergeReport, error) {
+	incoming, master, err := s.previewInputs(file, project)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", file, err)
+		return kubecfg.MergeReport{}, err
+	}
+	_, rep, err := kubecfg.Merge(master, incoming, opts)
+	return rep, err
+}
+
+// previewInputs loads the flattened incoming file and the raw master of
+// project; master is nil when the project does not exist yet.
+func (s *Store) previewInputs(file, project string) (incoming, master *api.Config, err error) {
+	if err := ValidateName(project); err != nil {
+		return nil, nil, err
+	}
+	incoming, err = kubecfg.LoadFlattened(file)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %s: %w", file, err)
 	}
 	exists, err := s.existingProject(project)
 	if err != nil || !exists {
-		return nil, err
+		return incoming, nil, err
 	}
-	master, err := kubecfg.LoadFlattened(s.ProjectPath(project))
+	path := s.ProjectPath(project)
+	data, err := readProjectFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
+		return nil, nil, err
 	}
-	return kubecfg.DetectConflicts(master, incoming), nil
+	master, err = kubecfg.LoadBytes(data, path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
+	}
+	return incoming, master, nil
 }
 
 // RemoveContext deletes ctx from project's master file only, after a backup.
@@ -219,20 +290,27 @@ func (s *Store) RemoveContext(project, ctx string, keepOrphans bool) (kubecfg.De
 		return kubecfg.DeleteReport{}, fmt.Errorf("%w: %s", ErrNotFound, project)
 	}
 	path := s.ProjectPath(project)
-	cfg, err := kubecfg.Load(path)
+	var rep kubecfg.DeleteReport
+	err = fsutil.WithLock(path, func() error {
+		data, err := readProjectFile(path)
+		if err != nil {
+			return err
+		}
+		cfg, err := kubecfg.LoadBytes(data, path)
+		if err != nil {
+			return fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
+		}
+		if rep, err = kubecfg.DeleteContext(cfg, ctx, keepOrphans); err != nil {
+			return err
+		}
+		// DeleteReport has no room for a warning; a failed prune only means
+		// old backups linger, and the new backup exists, so ignoring it is safe.
+		if _, _, err := s.backupData(project, "rmctx", data, path); err != nil {
+			return err
+		}
+		return kubecfg.Save(cfg, path)
+	})
 	if err != nil {
-		return kubecfg.DeleteReport{}, fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
-	}
-	rep, err := kubecfg.DeleteContext(cfg, ctx, keepOrphans)
-	if err != nil {
-		return kubecfg.DeleteReport{}, err
-	}
-	// DeleteReport has no room for a warning; a failed prune only means old
-	// backups linger, and the new backup exists, so ignoring it is safe.
-	if _, _, err := s.backup(project, "rmctx", path); err != nil {
-		return kubecfg.DeleteReport{}, err
-	}
-	if err := kubecfg.Save(cfg, path); err != nil {
 		return kubecfg.DeleteReport{}, err
 	}
 	return rep, nil
@@ -390,15 +468,66 @@ func (s *Store) Restore(project, id string) error {
 	if err != nil {
 		return err
 	}
-	if exists {
-		// Warning dropped: the pre-restore backup exists even if pruning failed.
-		if _, _, err := s.backup(project, "prerestore", s.ProjectPath(project)); err != nil {
+	path := s.ProjectPath(project)
+	if !exists {
+		if err := os.MkdirAll(s.Root, 0o700); err != nil {
 			return err
 		}
-	} else if err := os.MkdirAll(s.Root, 0o700); err != nil {
+		return fsutil.WriteFileAtomic(path, data)
+	}
+	return fsutil.WithLock(path, func() error {
+		// An empty current file is allowed here: restoring is how it is fixed.
+		cur, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		// Warning dropped: the pre-restore backup exists even if pruning failed.
+		if _, _, err := s.backupData(project, "prerestore", cur, path); err != nil {
+			return err
+		}
+		return fsutil.WriteFileAtomic(path, data)
+	})
+}
+
+// RestoreInitial writes the "_initial" backup id (the newest when id is empty)
+// to a new project named as. It never overwrites an existing project and never
+// touches <root>/config.
+func (s *Store) RestoreInitial(id, as string) error {
+	if err := ValidateName(as); err != nil {
 		return err
 	}
-	return fsutil.WriteFileAtomic(s.ProjectPath(project), data)
+	if _, err := os.Lstat(s.ProjectPath(as)); err == nil {
+		return fmt.Errorf("%w: %s", ErrExists, as)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	var b backup.Backup
+	if id == "" {
+		bs, err := s.Backups.List(backup.InitialProject)
+		if err != nil {
+			return err
+		}
+		if len(bs) == 0 {
+			return fmt.Errorf("no backups of an original config: %w", fs.ErrNotExist)
+		}
+		b = bs[0]
+	} else {
+		var err error
+		if b, err = s.Backups.Get(backup.InitialProject, id); err != nil {
+			return err
+		}
+	}
+	data, err := os.ReadFile(b.Path)
+	if err != nil {
+		return err
+	}
+	if _, err := clientcmd.Load(data); err != nil {
+		return fmt.Errorf("backup %s is not a valid kubeconfig: %w", b.ID, err)
+	}
+	if err := os.MkdirAll(s.Root, 0o700); err != nil {
+		return err
+	}
+	return fsutil.WriteFileAtomic(s.ProjectPath(as), data)
 }
 
 // Target is the file a ctx/ns command edits.
@@ -460,14 +589,20 @@ func (s *Store) SetNamespace(t Target, ns string) error {
 }
 
 func editTarget(t Target, edit func(*api.Config) error) error {
-	cfg, err := kubecfg.Load(t.Path)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", t.Path, err)
-	}
-	if err := edit(cfg); err != nil {
-		return err
-	}
-	return kubecfg.Save(cfg, t.Path)
+	return fsutil.WithLock(t.Path, func() error {
+		data, err := readProjectFile(t.Path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", t.Path, err)
+		}
+		cfg, err := kubecfg.LoadBytes(data, t.Path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", t.Path, err)
+		}
+		if err := edit(cfg); err != nil {
+			return err
+		}
+		return kubecfg.Save(cfg, t.Path)
+	})
 }
 
 // checkShellKubeconfig accepts only a single path directly inside ShellsDir():

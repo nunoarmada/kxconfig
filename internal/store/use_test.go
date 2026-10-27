@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 )
 
 func readFile(t *testing.T, path string) string {
@@ -87,7 +89,7 @@ func TestUseIdenticalForeignAdoptsSilently(t *testing.T) {
 func TestUseForeignFileRefuses(t *testing.T) {
 	s := newStore(t)
 	addProject(t, s, "dev", validCfg)
-	foreign := validCfg + "# mine\n"
+	foreign := mkCfg("a", "ca", "https://a", "ua", "t1") // not what dev holds
 	writeFile(t, s.ConfigPath(), foreign, 0o600)
 
 	err := s.Use("dev")
@@ -251,5 +253,40 @@ func TestUseIdenticalToOtherProjectAdopts(t *testing.T) {
 	bs, _ := s.Backups.List("_initial")
 	if len(bs) != 1 || !bytes.Equal([]byte(readFile(t, bs[0].Path)), []byte(validCfg)) {
 		t.Fatalf("backup = %v", bs)
+	}
+}
+
+func TestUseAdoptsSemanticallyIdenticalForeign(t *testing.T) {
+	s := newStore(t)
+	// ~/.kube/config as the user wrote it: comments, other indentation.
+	foreign := "# my config\n" + mkCfg("a", "ca", "https://a", "ua", "t1")
+	in := writeIncoming(t, foreign)
+	if _, err := s.Import(in, "dev", ImportMerge, kubecfg.MergeOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if readFile(t, s.ProjectPath("dev")) == foreign {
+		t.Fatal("setup: project should have been re-serialised")
+	}
+	writeFile(t, s.ConfigPath(), foreign, 0o600)
+	if err := s.Use("dev"); err != nil {
+		t.Fatalf("Use = %v, want a silent adoption", err)
+	}
+	assertState(t, s, "dev", LinkOK)
+	bs, _ := s.Backups.List("_initial")
+	if len(bs) != 1 || readFile(t, bs[0].Path) != foreign {
+		t.Fatalf("backup = %v", bs)
+	}
+}
+
+func TestUseAdoptsForeignWithRelativeFileReferences(t *testing.T) {
+	s := newStore(t)
+	writeFile(t, filepath.Join(s.Root, "ca.crt"), "CA", 0o600)
+	foreign := rawCfgWithCA("ca.crt")
+	writeFile(t, s.ConfigPath(), foreign, 0o600)
+	if _, err := s.Import(s.ConfigPath(), "dev", ImportMerge, kubecfg.MergeOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Use("dev"); err != nil {
+		t.Fatalf("Use = %v, want a silent adoption", err)
 	}
 }

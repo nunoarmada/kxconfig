@@ -1,9 +1,12 @@
 package fsutil
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func mustMode(t *testing.T, path string) os.FileMode {
@@ -137,5 +140,55 @@ func TestWriteFileAtomicFollowsRelativeSymlink(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(b); string(got) != "new" {
 		t.Fatalf("b content = %q", got)
+	}
+}
+
+func TestWithLockCreatesAndRemovesLockFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "cfg")
+	ran := false
+	err := WithLock(p, func() error {
+		ran = true
+		if _, err := os.Stat(p + ".lock"); err != nil {
+			t.Errorf("lock file missing while held: %v", err)
+		}
+		return nil
+	})
+	if err != nil || !ran {
+		t.Fatalf("WithLock = %v, ran %v", err, ran)
+	}
+	if _, err := os.Stat(p + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock file left behind: %v", err)
+	}
+}
+
+func TestWithLockHeldElsewhereFails(t *testing.T) {
+	old := LockWait
+	LockWait = 60 * time.Millisecond
+	defer func() { LockWait = old }()
+	p := filepath.Join(t.TempDir(), "cfg")
+	if err := os.WriteFile(p+".lock", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ran := false
+	err := WithLock(p, func() error { ran = true; return nil })
+	if err == nil || !strings.Contains(err.Error(), ".lock") {
+		t.Fatalf("err = %v, want a lock error naming the lock file", err)
+	}
+	if ran {
+		t.Fatal("fn ran without the lock")
+	}
+	if _, err := os.Stat(p + ".lock"); err != nil {
+		t.Fatalf("someone else's lock file was removed: %v", err)
+	}
+}
+
+func TestWithLockRemovesLockOnError(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "cfg")
+	want := errors.New("boom")
+	if err := WithLock(p, func() error { return want }); !errors.Is(err, want) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(p + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock file left behind: %v", err)
 	}
 }

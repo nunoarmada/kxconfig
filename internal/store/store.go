@@ -29,6 +29,9 @@ var (
 	ErrForeignSymlink = errors.New("config is a symlink that does not point to a kx project")
 	// ErrNotFound means the named project does not exist.
 	ErrNotFound = errors.New("project not found")
+	// ErrEmptyProject means a project file has zero length (for example
+	// truncated by another tool); kx refuses to merge into or write over it.
+	ErrEmptyProject = errors.New("project file is empty; refusing to write")
 	// ErrInvalidName means a project name is not acceptable.
 	ErrInvalidName = errors.New("invalid project name")
 )
@@ -44,8 +47,9 @@ type Store struct {
 	Root    string
 	Backups *backup.Manager
 
-	// create takes a backup; nil means Backups.Create. Tests inject failures.
-	create func(project, op, src string) (backup.Backup, error)
+	// create takes a backup of data; nil means Backups.CreateData. Tests
+	// inject failures.
+	create func(project, op string, data []byte) (backup.Backup, error)
 }
 
 // New returns a Store rooted at root.
@@ -56,10 +60,16 @@ func New(root string) *Store {
 	}
 }
 
-// DefaultRoot returns $KX_HOME, or ~/.kube when it is unset.
+// DefaultRoot returns $KX_HOME as an absolute path, or ~/.kube when it is
+// unset. It is absolute so symlink targets and shell copies never depend on
+// the working directory.
 func DefaultRoot() (string, error) {
 	if h := os.Getenv("KX_HOME"); h != "" {
-		return h, nil
+		abs, err := filepath.Abs(h)
+		if err != nil {
+			return "", fmt.Errorf("resolve KX_HOME: %w", err)
+		}
+		return abs, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

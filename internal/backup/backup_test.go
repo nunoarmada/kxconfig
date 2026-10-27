@@ -220,3 +220,39 @@ func TestCreatePruneErrorKeepsBackup(t *testing.T) {
 		t.Errorf("created backup missing: %v", serr)
 	}
 }
+
+func TestCreateDataStoresExactBytes(t *testing.T) {
+	m, _ := newManager(t, time.Second)
+	b, err := m.CreateData("proj", "import", []byte("exact bytes\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(b.Path)
+	if err != nil || string(got) != "exact bytes\n" {
+		t.Fatalf("content = %q, %v", got, err)
+	}
+	if b.Op != "import" || b.Project != "proj" {
+		t.Errorf("backup = %+v", b)
+	}
+}
+
+func TestInitialBackupsAreNeverPruned(t *testing.T) {
+	m, src := newManager(t, time.Second)
+	var first Backup
+	for i := 0; i < Keep+5; i++ {
+		b, err := m.Create(InitialProject, "adopt", src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			first = b
+		}
+	}
+	got, err := m.List(InitialProject)
+	if err != nil || len(got) != Keep+5 {
+		t.Fatalf("len = %d, %v; _initial backups must be kept", len(got), err)
+	}
+	if _, err := os.Stat(first.Path); err != nil {
+		t.Errorf("oldest _initial backup was pruned: %v", err)
+	}
+}

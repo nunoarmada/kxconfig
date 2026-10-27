@@ -3,6 +3,7 @@ package kubecfg
 import (
 	"errors"
 	"fmt"
+	"regexp"
 
 	"k8s.io/client-go/tools/clientcmd/api"
 )
@@ -74,6 +75,12 @@ func SetCurrentContext(cfg *api.Config, ctx string) error {
 	cfg.CurrentContext = ctx
 	return nil
 }
+
+var namespaceRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
+
+// ValidNamespace reports whether ns is a valid (non-empty) Kubernetes
+// namespace name: a DNS-1123 label.
+func ValidNamespace(ns string) bool { return namespaceRe.MatchString(ns) }
 
 // SetNamespace sets the namespace of the current context.
 func SetNamespace(cfg *api.Config, ns string) error {

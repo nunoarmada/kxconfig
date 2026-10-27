@@ -20,6 +20,11 @@ import (
 // Keep is the number of backups retained per project.
 const Keep = 20
 
+// InitialProject is the backup namespace for adopted ~/.kube/config files.
+// It is deliberately not a valid project name, and its backups are never
+// pruned: they may be the only copy of a user's original config.
+const InitialProject = "_initial"
+
 const (
 	idLayout = "20060102T150405.000Z"
 	ext      = ".yaml"
@@ -64,6 +69,16 @@ func (m *Manager) projectDir(project string) string {
 // If the copy succeeds but pruning old backups fails, Create returns the
 // created Backup together with a non-nil error wrapping the prune failure.
 func (m *Manager) Create(project, op, src string) (Backup, error) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return Backup{}, fmt.Errorf("create backup: %w", err)
+	}
+	return m.CreateData(project, op, data)
+}
+
+// CreateData is Create for content the caller already read, so the backup
+// holds exactly the bytes that were parsed and are about to be replaced.
+func (m *Manager) CreateData(project, op string, data []byte) (Backup, error) {
 	if !opRe.MatchString(op) {
 		return Backup{}, fmt.Errorf("invalid backup op %q", op)
 	}
@@ -88,7 +103,7 @@ func (m *Manager) Create(project, op, src string) (Backup, error) {
 		id = base + "-" + strconv.Itoa(n)
 	}
 	path := filepath.Join(dir, id+ext)
-	if err := fsutil.CopyFile(src, path); err != nil {
+	if err := fsutil.WriteFileAtomic(path, data); err != nil {
 		return Backup{}, fmt.Errorf("create backup: %w", err)
 	}
 	b := Backup{ID: id, Project: project, Op: op, Path: path, Time: t}
@@ -182,6 +197,9 @@ func parseID(id string) (entry, bool) {
 }
 
 func (m *Manager) prune(project string) error {
+	if project == InitialProject {
+		return nil
+	}
 	entries, err := m.entries(project)
 	if err != nil {
 		return err
