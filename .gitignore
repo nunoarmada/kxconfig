@@ -36,3 +36,6 @@ Thumbs.db
 # Go build output
 /dist/
 /kx
+
+# GoReleaser generated completions
+/completions/

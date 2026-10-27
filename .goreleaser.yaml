@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: kxconfig
+
+before:
+  hooks:
+    - rm -rf completions
+    - mkdir completions
+    - sh -c 'go run ./cmd/kx completion bash > completions/kx.bash'
+    - sh -c 'go run ./cmd/kx completion zsh > completions/kx.zsh'
+    - sh -c 'go run ./cmd/kx completion fish > completions/kx.fish'
+
+builds:
+  - id: kx
+    main: ./cmd/kx
+    binary: kx
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: kx
+    formats: [tar.gz]
+    name_template: "kx_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - readme.md
+      - completions/*
+
+checksum:
+  name_template: checksums.txt
+
+# release-please writes the changelog and the release notes.
+changelog:
+  disable: true
+
+release:
+  mode: keep-existing
+  replace_existing_artifacts: true
+
+# `brews` is deprecated in GoReleaser 2.x but still works; it keeps the
+# `brew install nunoarmada/kxconfig/kxconfig` formula (macOS and Linux).
+brews:
+  - name: kxconfig
+    ids: [kx]
+    repository:
+      owner: nunoarmada
+      name: homebrew-kxconfig
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/nunoarmada/kxconfig
+    description: "Switch between kubeconfig projects from a terminal UI or the command line"
+    license: MIT
+    install: |
+      bin.install "kx"
+      bash_completion.install "completions/kx.bash" => "kx"
+      zsh_completion.install "completions/kx.zsh" => "_kx"
+      fish_completion.install "completions/kx.fish"
+    test: |
+      system "#{bin}/kx", "version"

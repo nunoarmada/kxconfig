@@ -1,108 +1,71 @@
 name: CI
 
 on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-    lint:
-        name: Lint Scripts
-        runs-on: ubuntu-latest
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
 
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
-            - name: Install ShellCheck
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y shellcheck
+      - name: Vet
+        run: go vet ./...
 
-            - name: Run ShellCheck on scripts
-              run: |
-                  echo "Linting all bash scripts with ShellCheck..."
-                  shellcheck bin/kxconfig bin/kxswap scripts/install.sh scripts/uninstall.sh completions/kxconfig-completion.bash
-                  echo "✓ All scripts passed ShellCheck"
+      - name: Test
+        run: go test -race ./...
 
-            - name: Check script syntax
-              run: |
-                  echo "Checking syntax of all scripts..."
-                  bash -n bin/kxconfig
-                  bash -n bin/kxswap
-                  bash -n scripts/install.sh
-                  bash -n scripts/uninstall.sh
-                  bash -n completions/kxconfig-completion.bash
-                  echo "✓ All scripts have valid syntax"
+      - name: Build
+        run: go build ./cmd/kx
 
-            - name: Verify scripts are executable
-              run: |
-                  test -x bin/kxconfig || (echo "bin/kxconfig is not executable" && exit 1)
-                  test -x bin/kxswap || (echo "bin/kxswap is not executable" && exit 1)
-                  test -x scripts/install.sh || (echo "scripts/install.sh is not executable" && exit 1)
-                  test -x scripts/uninstall.sh || (echo "scripts/uninstall.sh is not executable" && exit 1)
-                  echo "✓ All scripts are executable"
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
-            - name: Verify shebang lines
-              run: |
-                  for script in bin/kxconfig bin/kxswap scripts/install.sh scripts/uninstall.sh; do
-                    if ! head -1 "$script" | grep -q "^#!/usr/bin/env bash\|^#!/bin/bash"; then
-                      echo "Error: $script missing or invalid shebang"
-                      exit 1
-                    fi
-                  done
-                  echo "✓ All scripts have valid shebang"
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
-    test:
-        name: Test Scripts
-        needs: lint
-        runs-on: ubuntu-latest
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
 
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  goreleaser-check:
+    name: GoReleaser config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
-            - name: Install kubectl
-              run: |
-                  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                  chmod +x kubectl
-                  sudo mv kubectl /usr/local/bin/
-                  kubectl version --client
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
-            - name: Test kxconfig help
-              run: |
-                  chmod +x bin/kxconfig
-                  # Test that help is displayed (ignore exit code due to set -e in cleanup)
-                  bin/kxconfig --help 2>&1 | grep -q "Usage:" || exit 1
-                  echo "✓ kxconfig --help works"
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          install-only: true
 
-            - name: Test kxswap help
-              run: |
-                  chmod +x bin/kxswap
-                  bin/kxswap --help || exit 1
-                  echo "✓ kxswap --help works"
-
-            - name: Test install script syntax
-              run: |
-                  chmod +x scripts/install.sh
-                  bash -n scripts/install.sh
-                  echo "✓ install.sh syntax is valid"
-
-            - name: Test uninstall script syntax
-              run: |
-                  chmod +x scripts/uninstall.sh
-                  bash -n scripts/uninstall.sh
-                  echo "✓ uninstall.sh syntax is valid"
-
-            - name: Test uninstall script help
-              run: |
-                  scripts/uninstall.sh --help || exit 1
-                  echo "✓ uninstall.sh --help works"
-
-            - name: Test completion script syntax
-              run: |
-                  # Source the completion script to check for syntax errors
-                  bash -c "source completions/kxconfig-completion.bash" || true
-                  echo "✓ Completion script syntax is valid"
-
+      # Exit 2 means "valid, but uses deprecated properties" (`brews`).
+      - name: Check config
+        run: |
+          rc=0
+          goreleaser check || rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then exit "$rc"; fi
