@@ -7,7 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/nunoarmada/kxconfig/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 )
 
 // cell is one styled piece of a list row.

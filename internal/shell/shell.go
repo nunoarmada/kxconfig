@@ -12,9 +12,9 @@ import (
 
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 // Command prepares a subshell for project: it refuses when already inside a

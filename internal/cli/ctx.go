@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 )
 
 func (a *app) newCtx() *cobra.Command {

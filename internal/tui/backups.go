@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nunoarmada/kxconfig/internal/backup"
-	"github.com/nunoarmada/kxconfig/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/backup"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 )
 
 // relTime is a short "3h ago" style age.

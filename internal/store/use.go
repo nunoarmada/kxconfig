@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 )
 
 // initialProject is the backup namespace for adopted ~/.kube/config files. It

@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 func shellModel(t *testing.T, w, h int) (Model, string) {

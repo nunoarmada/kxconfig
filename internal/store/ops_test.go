@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nunoarmada/kxconfig/internal/backup"
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/backup"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 )
 
 // mkCfg returns a kubeconfig with one context ctx -> cluster cl (server) and

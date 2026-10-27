@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nunoarmada/kxconfig/internal/safetext"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 // Deps carries everything the commands need, so tests can run them in-process.

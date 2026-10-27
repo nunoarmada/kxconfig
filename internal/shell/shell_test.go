@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 const cfg = "apiVersion: v1\nkind: Config\nclusters: []\ncontexts: []\nusers: []\n"

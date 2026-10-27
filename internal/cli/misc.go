@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/safetext"
-	"github.com/nunoarmada/kxconfig/internal/shell"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/shell"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 type lsRow struct {

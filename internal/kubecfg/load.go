@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
 )
 
 // Load reads a kubeconfig file. Relative file references are left as-is and

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
 )
 
 // Keep is the number of backups retained per project.

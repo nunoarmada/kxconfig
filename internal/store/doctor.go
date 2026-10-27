@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
 )
 
 // Issue is one problem found by Doctor. Fixable issues are repaired when

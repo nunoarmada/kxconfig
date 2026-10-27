@@ -7,9 +7,9 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/nunoarmada/kxconfig/internal/cli"
-	"github.com/nunoarmada/kxconfig/internal/store"
-	"github.com/nunoarmada/kxconfig/internal/tui"
+	"github.com/nunoarmada/kxconfig/v2/internal/cli"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/tui"
 )
 
 var version = "dev"

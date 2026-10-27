@@ -3,8 +3,8 @@ package tui
 import (
 	"fmt"
 
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 )
 
 // contextsPane draws the contexts of the selected project.

@@ -8,7 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nunoarmada/kxconfig/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 )
 
 // command is one entry of the command palette.

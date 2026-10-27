@@ -3,7 +3,7 @@ package tui
 import (
 	"path/filepath"
 
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 // Minimum terminal size; below it only a notice is drawn.

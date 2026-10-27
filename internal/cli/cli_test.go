@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 // kcYAML renders a kubeconfig with one cluster, one user and one context.

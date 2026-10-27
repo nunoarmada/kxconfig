@@ -13,9 +13,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nunoarmada/kxconfig/internal/backup"
-	"github.com/nunoarmada/kxconfig/internal/fsutil"
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/backup"
+	"github.com/nunoarmada/kxconfig/v2/internal/fsutil"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 )
 
 const projectPrefix = "config-"

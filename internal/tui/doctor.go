@@ -3,8 +3,8 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nunoarmada/kxconfig/internal/safetext"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 // startDoctor checks the kx home and shows the findings.

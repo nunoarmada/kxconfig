@@ -11,10 +11,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nunoarmada/kxconfig/internal/kubecfg"
-	"github.com/nunoarmada/kxconfig/internal/safetext"
-	"github.com/nunoarmada/kxconfig/internal/shell"
-	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
+	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
+	"github.com/nunoarmada/kxconfig/v2/internal/shell"
+	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
 
 // activate makes the selected project the active one (enter on a project).
