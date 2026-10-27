@@ -40,7 +40,7 @@ func (s *Store) Doctor(fix bool) ([]Issue, error) {
 		if fsutil.TooOpen(p.Mode) {
 			i := add(Issue{Kind: "perms", Path: p.Path, Fixable: true, Message: fmt.Sprintf("project %s has mode %04o, want 0600", p.Name, p.Mode)})
 			if fix {
-				i.Fixed = os.Chmod(p.Path, 0o600) == nil
+				i.Fixed = fixed(i, chmod(p.Path, 0o600))
 			}
 		}
 	}
@@ -78,12 +78,12 @@ func (s *Store) Doctor(fix bool) ([]Issue, error) {
 		case d.IsDir() && mode != 0o700:
 			i := add(Issue{Kind: "perms", Path: path, Fixable: true, Message: fmt.Sprintf("directory has mode %04o, want 0700", mode)})
 			if fix {
-				i.Fixed = os.Chmod(path, 0o700) == nil
+				i.Fixed = fixed(i, chmod(path, 0o700))
 			}
 		case !d.IsDir() && fsutil.TooOpen(mode):
 			i := add(Issue{Kind: "perms", Path: path, Fixable: true, Message: fmt.Sprintf("file has mode %04o, want 0600", mode)})
 			if fix {
-				i.Fixed = os.Chmod(path, 0o600) == nil
+				i.Fixed = fixed(i, chmod(path, 0o600))
 			}
 		}
 		return nil
@@ -102,8 +102,20 @@ func (s *Store) Doctor(fix bool) ([]Issue, error) {
 		}
 		i := add(Issue{Kind: "stale-shell", Path: c.path, Fixable: true, Message: fmt.Sprintf("shell copy of %s from dead process %d", c.project, c.pid)})
 		if fix {
-			i.Fixed = os.Remove(c.path) == nil
+			i.Fixed = fixed(i, os.Remove(c.path))
 		}
 	}
 	return issues, nil
+}
+
+// chmod is os.Chmod; tests replace it to simulate failures.
+var chmod = os.Chmod
+
+// fixed reports whether a repair succeeded, recording the error otherwise.
+func fixed(i *Issue, err error) bool {
+	if err != nil {
+		i.Message += " (fix failed: " + err.Error() + ")"
+		return false
+	}
+	return true
 }

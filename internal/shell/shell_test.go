@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nunoarmada/kxconfig/internal/kubecfg"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -61,8 +62,8 @@ func TestCommandEnvAndCopy(t *testing.T) {
 	if di, _ := os.Stat(filepath.Dir(copyPath)); di.Mode().Perm() != 0o700 {
 		t.Errorf("shells dir mode = %v", di.Mode().Perm())
 	}
-	if got, _ := os.ReadFile(copyPath); string(got) != cfg {
-		t.Errorf("copy content = %q", got)
+	if got, err := kubecfg.Load(copyPath); err != nil || len(got.Contexts) != 0 {
+		t.Errorf("copy does not parse as the (empty) project: %+v, %v", got, err)
 	}
 
 	// Run a non-interactive variant to prove the child sees the copy.
@@ -136,5 +137,44 @@ func TestCommandPrunesStale(t *testing.T) {
 	defer func() { _ = cleanup() }()
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Fatal("stale copy not pruned")
+	}
+}
+
+func TestCommandResolvesRelativeFileRefs(t *testing.T) {
+	s := newStore(t)
+	t.Setenv("SHELL", "/bin/sh")
+	if err := os.WriteFile(filepath.Join(s.Root, "ca.crt"), []byte("CA"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	withRef := "apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://x\n    certificate-authority: ca.crt\ncontexts: []\nusers: []\n"
+	if err := os.WriteFile(s.ProjectPath("prod"), []byte(withRef), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, cleanup, err := Command(s, "prod", store.Env{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cleanup() }()
+	got, err := kubecfg.Load(s.ShellCopyPath(os.Getpid(), "prod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ca := got.Clusters["c"].CertificateAuthority; ca != filepath.Join(s.Root, "ca.crt") {
+		t.Fatalf("certificate-authority = %q, want absolute path to master dir file", ca)
+	}
+	fi, _ := os.Stat(s.ShellCopyPath(os.Getpid(), "prod"))
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("copy mode = %v", fi.Mode().Perm())
+	}
+}
+
+func TestSpawnIgnoresShellExitStatus(t *testing.T) {
+	s := newStore(t)
+	t.Setenv("SHELL", "/bin/false")
+	if err := Spawn(s, "prod", store.Env{}); err != nil {
+		t.Fatalf("Spawn = %v, want nil for non-zero shell exit", err)
+	}
+	if _, err := os.Stat(s.ShellCopyPath(os.Getpid(), "prod")); !os.IsNotExist(err) {
+		t.Fatal("copy not cleaned up")
 	}
 }

@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"k8s.io/client-go/tools/clientcmd"
+
 	"github.com/nunoarmada/kxconfig/internal/fsutil"
 	"github.com/nunoarmada/kxconfig/internal/kubecfg"
 	"github.com/nunoarmada/kxconfig/internal/store"
@@ -32,9 +34,6 @@ func Command(s *store.Store, project string, env store.Env) (*exec.Cmd, func() e
 	} else if err != nil {
 		return nil, nil, err
 	}
-	if _, err := kubecfg.Load(master); err != nil {
-		return nil, nil, fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
-	}
 	if _, err := s.PruneStaleShells(); err != nil {
 		return nil, nil, fmt.Errorf("prune stale shell copies: %w", err)
 	}
@@ -42,7 +41,16 @@ func Command(s *store.Store, project string, env store.Env) (*exec.Cmd, func() e
 	if err := fsutil.EnsureDir(s.ShellsDir()); err != nil {
 		return nil, nil, err
 	}
-	if err := fsutil.CopyFile(master, copyPath); err != nil {
+	// Relative file references (certs, keys) resolve against the master's
+	// directory; make them absolute so they keep working from kx/shells/.
+	cfg, err := kubecfg.Load(master)
+	if err != nil {
+		return nil, nil, fmt.Errorf("project %s is not a valid kubeconfig: %w", project, err)
+	}
+	if err := clientcmd.ResolveLocalPaths(cfg); err != nil {
+		return nil, nil, fmt.Errorf("resolve paths in %s: %w", master, err)
+	}
+	if err := kubecfg.Save(cfg, copyPath); err != nil {
 		return nil, nil, fmt.Errorf("copy %s: %w", master, err)
 	}
 
@@ -77,7 +85,7 @@ outer:
 }
 
 // Spawn runs the subshell attached to the terminal and removes the copy when
-// it exits. A non-zero exit status of the shell is returned as its error.
+// it exits. A non-zero exit status of the shell is not an error.
 func Spawn(s *store.Store, project string, env store.Env) error {
 	cmd, cleanup, err := Command(s, project, env)
 	if err != nil {
@@ -85,5 +93,10 @@ func Spawn(s *store.Store, project string, env store.Env) error {
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	runErr := cmd.Run()
+	// The user's last command may have failed; that is not a kx failure.
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		runErr = nil
+	}
 	return errors.Join(runErr, cleanup())
 }

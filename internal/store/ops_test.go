@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nunoarmada/kxconfig/internal/backup"
@@ -482,7 +483,7 @@ func TestTargetResolution(t *testing.T) {
 	if err := s.Use("dev"); err != nil {
 		t.Fatal(err)
 	}
-	shellCopy := filepath.Join(t.TempDir(), "copy.yaml")
+	shellCopy := s.ShellCopyPath(1234, "prod")
 	inShell := Env{InShell: true, Project: "prod", Kubeconfig: shellCopy}
 	cases := []struct {
 		name string
@@ -577,5 +578,101 @@ func TestSetNamespaceDoesNotBackup(t *testing.T) {
 	}
 	if backupCount(t, s, "dev") != 0 {
 		t.Fatal("namespace change took a backup")
+	}
+}
+
+// failCreate makes every new backup fail while existing ones stay readable.
+func failCreate(s *Store) {
+	s.create = func(project, op, src string) (backup.Backup, error) {
+		return backup.Backup{}, errors.New("disk full")
+	}
+}
+
+func TestRestoreAndRenameAbortWhenBackupFails(t *testing.T) {
+	s := newStore(t)
+	orig := mkCfg("a", "ca", "https://a", "ua", "t1")
+	addProject(t, s, "dev", orig)
+	bk, err := s.Backups.Create("dev", "import", s.ProjectPath("dev"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, s.ProjectPath("dev"), validCfg, 0o600)
+	failCreate(s)
+
+	if err := s.Restore("dev", bk.ID); err == nil {
+		t.Error("Restore must abort when the pre-restore backup fails")
+	}
+	if got := readFile(t, s.ProjectPath("dev")); got != validCfg {
+		t.Errorf("project changed by aborted Restore: %q", got)
+	}
+	if err := s.Rename("dev", "dev2"); err == nil {
+		t.Error("Rename must abort when the backup fails")
+	}
+	if _, err := os.Lstat(s.ProjectPath("dev2")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("dev2 must not exist: %v", err)
+	}
+	if got := readFile(t, s.ProjectPath("dev")); got != validCfg {
+		t.Errorf("project changed by aborted Rename: %q", got)
+	}
+}
+
+func TestImportPruneFailureIsWarning(t *testing.T) {
+	s := newStore(t)
+	addProject(t, s, "dev", mkCfg("a", "ca", "https://a", "ua", "t1"))
+	real := s.Backups.Create
+	s.create = func(project, op, src string) (backup.Backup, error) {
+		b, err := real(project, op, src)
+		if err != nil {
+			return b, err
+		}
+		return b, errors.New("prune backups: boom")
+	}
+	res, err := s.Import(writeIncoming(t, mkCfg("b", "cb", "https://b", "ub", "t2")), "dev", ImportMerge, kubecfg.MergeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Changed || res.Backup == nil || len(res.Warnings) != 1 {
+		t.Fatalf("result = %+v", res)
+	}
+	if cfg, _ := kubecfg.Load(s.ProjectPath("dev")); cfg.Contexts["b"] == nil {
+		t.Fatal("import not written")
+	}
+}
+
+func TestDeleteClearsPrevious(t *testing.T) {
+	s := newStore(t)
+	addProject(t, s, "a", validCfg)
+	addProject(t, s, "b", validCfg)
+	if err := s.Use("a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Use("b"); err != nil { // previous = a
+		t.Fatal(err)
+	}
+	if err := s.Delete("a", false); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.Previous(); p != "" {
+		t.Fatalf("Previous() = %q, want cleared", p)
+	}
+}
+
+func TestTargetInShellRejectsForeignKubeconfig(t *testing.T) {
+	s := newStore(t)
+	addProject(t, s, "dev", validCfg)
+	inside := s.ShellCopyPath(1234, "dev")
+	if got, err := s.Target("", Env{InShell: true, Project: "dev", Kubeconfig: inside}); err != nil || got.Path != inside {
+		t.Fatalf("valid shell copy: %+v, %v", got, err)
+	}
+	for _, kc := range []string{
+		filepath.Join(s.Root, "config-dev"),
+		"/etc/passwd",
+		inside + ":" + s.ProjectPath("dev"),
+		filepath.Join(s.ShellsDir(), "..", "x.yaml"),
+	} {
+		_, err := s.Target("", Env{InShell: true, Project: "dev", Kubeconfig: kc})
+		if err == nil || !strings.Contains(err.Error(), "KUBECONFIG was changed") {
+			t.Errorf("Kubeconfig %q: err = %v", kc, err)
+		}
 	}
 }

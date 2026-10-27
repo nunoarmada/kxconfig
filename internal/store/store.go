@@ -43,6 +43,9 @@ var (
 type Store struct {
 	Root    string
 	Backups *backup.Manager
+
+	// create takes a backup; nil means Backups.Create. Tests inject failures.
+	create func(project, op, src string) (backup.Backup, error)
 }
 
 // New returns a Store rooted at root.

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -56,7 +57,11 @@ func classifyBackup(b backup.Backup, err error) (backup.Backup, string, error) {
 // backup is the single entry point for taking a backup before a change. See
 // classifyBackup for the contract; warn is a non-fatal message.
 func (s *Store) backup(project, op, src string) (b backup.Backup, warn string, err error) {
-	b, warn, err = classifyBackup(s.Backups.Create(project, op, src))
+	create := s.Backups.Create
+	if s.create != nil {
+		create = s.create
+	}
+	b, warn, err = classifyBackup(create(project, op, src))
 	if err != nil {
 		return backup.Backup{}, "", fmt.Errorf("back up %s: %w", src, err)
 	}
@@ -345,12 +350,21 @@ func (s *Store) Delete(name string, force bool) error {
 	if _, _, err := s.backup(name, "delete", s.ProjectPath(name)); err != nil {
 		return err
 	}
+	// File first: if it cannot be removed the link stays valid.
+	if err := os.Remove(s.ProjectPath(name)); err != nil {
+		return err
+	}
 	if isActive {
 		if err := os.Remove(s.ConfigPath()); err != nil {
-			return err
+			return fmt.Errorf("deleted %s but could not remove the config link: %w", name, err)
 		}
 	}
-	return os.Remove(s.ProjectPath(name))
+	if prev, err := s.Previous(); err == nil && prev == name {
+		if err := s.setPrevious(""); err != nil {
+			return fmt.Errorf("deleted %s but could not clear previous project: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // Restore replaces project's master with backup id, after backing up the
@@ -411,8 +425,8 @@ func (s *Store) Target(projectFlag string, env Env) (Target, error) {
 		return Target{Path: s.ProjectPath(projectFlag), Project: projectFlag}, nil
 	}
 	if env.InShell {
-		if env.Kubeconfig == "" {
-			return Target{}, errors.New("inside a kx shell but KUBECONFIG is not set")
+		if err := s.checkShellKubeconfig(env.Kubeconfig); err != nil {
+			return Target{}, err
 		}
 		return Target{Path: env.Kubeconfig, Project: env.Project, InShell: true}, nil
 	}
@@ -454,4 +468,15 @@ func editTarget(t Target, edit func(*api.Config) error) error {
 		return err
 	}
 	return kubecfg.Save(cfg, t.Path)
+}
+
+// checkShellKubeconfig accepts only a single path directly inside ShellsDir():
+// a KUBECONFIG changed inside the kx shell must never make ctx/ns edit some
+// other file.
+func (s *Store) checkShellKubeconfig(kc string) error {
+	if kc != "" && !strings.ContainsRune(kc, filepath.ListSeparator) &&
+		filepath.Clean(filepath.Dir(kc)) == filepath.Clean(s.ShellsDir()) {
+		return nil
+	}
+	return fmt.Errorf("KUBECONFIG was changed inside the kx shell (%q is not its private copy under %s); restore it or exit the shell", kc, s.ShellsDir())
 }

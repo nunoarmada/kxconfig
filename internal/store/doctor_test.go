@@ -1,8 +1,10 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -112,5 +114,24 @@ func TestDoctorStaleShells(t *testing.T) {
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Fatal("stale copy not removed by Doctor(true)")
+	}
+}
+
+func TestDoctorKeepsFixError(t *testing.T) {
+	s := newStore(t)
+	addProject(t, s, "dev", validCfg)
+	if err := os.Chmod(s.ProjectPath("dev"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orig := chmod
+	chmod = func(string, os.FileMode) error { return errors.New("operation not permitted") }
+	t.Cleanup(func() { chmod = orig })
+	issues, err := s.Doctor(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := findIssue(issues, "perms")
+	if i == nil || i.Fixed || !strings.Contains(i.Message, "operation not permitted") {
+		t.Fatalf("issue = %+v", i)
 	}
 }
