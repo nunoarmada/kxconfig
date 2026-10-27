@@ -14,6 +14,9 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# Third-party actions are pinned to full commit SHAs (the goreleaser job holds
+# HOMEBREW_TAP_TOKEN); the comment names the release each SHA is. Update them
+# deliberately, checking the tag with git ls-remote.
 jobs:
   release-please:
     name: Release Please
@@ -27,7 +30,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
@@ -40,16 +43,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
           fetch-depth: 0
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           distribution: goreleaser
           version: "~> v2"
