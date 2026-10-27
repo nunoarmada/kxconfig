@@ -24,7 +24,7 @@ func (a *app) newRename() *cobra.Command {
 			if err := a.Store.Rename(args[0], args[1]); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(a.Out, "Renamed project %s to %s\n", args[0], args[1])
+			_, _ = fmt.Fprintf(a.Out, "Renamed project %s to %s\n", safetext.Clean(args[0]), safetext.Clean(args[1]))
 			return nil
 		},
 		ValidArgsFunction: a.projectArgs,
@@ -45,7 +45,7 @@ func (a *app) newDelete() *cobra.Command {
 			active, st, aerr := a.Store.Active()
 			wasActive := aerr == nil && st == store.LinkOK && active == name
 			if wasActive && !force {
-				return fmt.Errorf("project %s is active; use --force to delete it and deactivate", name)
+				return fmt.Errorf("project %s is active; use --force to delete it and deactivate", safetext.Clean(name))
 			}
 			if !yes {
 				if err := a.confirm(fmt.Sprintf("Delete project %s?", name)); err != nil {
@@ -55,11 +55,11 @@ func (a *app) newDelete() *cobra.Command {
 			a.warnLiveShells(name)
 			if err := a.Store.Delete(name, force); err != nil {
 				if errors.Is(err, store.ErrActive) {
-					return fmt.Errorf("project %s is active; use --force to delete it and deactivate", name)
+					return fmt.Errorf("project %s is active; use --force to delete it and deactivate", safetext.Clean(name))
 				}
 				return err
 			}
-			_, _ = fmt.Fprintf(a.Out, "Deleted project %s (backup kept; see 'kx backups %s')\n", name, name)
+			_, _ = fmt.Fprintf(a.Out, "Deleted project %s (backup kept; see 'kx backups %s')\n", safetext.Clean(name), safetext.Clean(name))
 			if wasActive {
 				_, _ = fmt.Fprintf(a.Out, "The config link was removed, so no project is active; run 'kx use <project>'.\n")
 			}
@@ -86,7 +86,7 @@ func (a *app) newBackups() *cobra.Command {
 				return err
 			}
 			if len(bs) == 0 {
-				_, _ = fmt.Fprintf(a.Out, "No backups for project %s\n", args[0])
+				_, _ = fmt.Fprintf(a.Out, "No backups for project %s\n", safetext.Clean(args[0]))
 				return nil
 			}
 			tw := tabwriter.NewWriter(a.Out, 0, 4, 2, ' ', 0)
@@ -134,7 +134,7 @@ func (a *app) newRestore() *cobra.Command {
 					return err
 				}
 				if len(bs) == 0 {
-					return fmt.Errorf("no backups for project %s", name)
+					return fmt.Errorf("no backups for project %s", safetext.Clean(name))
 				}
 				id = bs[0].ID
 			}
@@ -147,7 +147,7 @@ func (a *app) newRestore() *cobra.Command {
 			if err := a.Store.Restore(name, id); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(a.Out, "Restored project %s from backup %s\n", name, id)
+			_, _ = fmt.Fprintf(a.Out, "Restored project %s from backup %s\n", safetext.Clean(name), safetext.Clean(id))
 			return nil
 		},
 		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

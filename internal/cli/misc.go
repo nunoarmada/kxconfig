@@ -98,10 +98,10 @@ func (a *app) newCurrent() *cobra.Command {
 				return errors.New("no active project")
 			}
 			if name != "" {
-				_, _ = fmt.Fprintln(a.Out, name)
+				_, _ = fmt.Fprintln(a.Out, safetext.Clean(name))
 			}
 			if a.Env.InShell {
-				_, _ = fmt.Fprintf(a.Out, "shell: %s\n", a.Env.Project)
+				_, _ = fmt.Fprintf(a.Out, "shell: %s\n", safetext.Clean(a.Env.Project))
 			}
 			return nil
 		},
@@ -114,7 +114,7 @@ func (a *app) newShell() *cobra.Command {
 		Short: "Open a subshell isolated to one project",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			_, _ = fmt.Fprintf(a.Err, "kx: entering shell for %s (exit to leave). Tip: show $KX_PROJECT in your prompt.\n", args[0])
+			_, _ = fmt.Fprintf(a.Err, "kx: entering shell for %s (exit to leave). Tip: show $KX_PROJECT in your prompt.\n", safetext.Clean(args[0]))
 			return shell.Spawn(a.Store, args[0], a.Env)
 		},
 		ValidArgsFunction: a.projectArgs,
