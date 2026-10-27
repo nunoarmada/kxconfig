@@ -143,6 +143,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
 		m.restyle()
+	case shellDoneMsg:
+		cmd = m.shellDone(msg)
+	case editDoneMsg:
+		cmd = m.editDone(msg)
 	case statusExpireMsg:
 		if msg.seq == m.status.seq {
 			m.status = status{seq: m.status.seq}

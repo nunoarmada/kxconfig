@@ -65,13 +65,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "/":
 		return m.startFilter()
 	case ":":
-		return m.later("Command palette")
+		m.push(newPaletteDialog(m))
 	case "ctrl+r":
-		if err := m.reload(); err != nil {
-			m.loadErr = err
-			return m.failed("read projects", err)
-		}
-		return m.say(statusInfo, "Reloaded from disk")
+		return m.reloadKey()
 	case "enter":
 		switch m.focus {
 		case paneProjects:
@@ -80,7 +76,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.setContext()
 		}
 	case "i":
-		return m.later("Import")
+		return m.startImport()
 	case "a":
 		if len(m.projects) == 0 && m.link == store.LinkForeignFile {
 			m.push(newAdoptNameDialog(m, ""))
@@ -97,35 +93,30 @@ func (m *Model) paneKey(k string) tea.Cmd {
 	case paneProjects:
 		switch k {
 		case "r":
-			return m.later("Rename")
+			return m.startRename()
 		case "D":
-			return m.later("Delete")
+			return m.startDelete()
 		case "d":
 			return m.say(statusInfo, "Use D to delete a project")
 		case "b":
-			return m.later("Backups")
+			return m.startBackups()
 		case "e":
-			return m.later("Edit")
+			return m.startEdit()
 		case "s":
 			if m.env.InShell {
 				return m.say(statusWarn, "Already inside a kx shell")
 			}
-			return m.later("Shell")
+			return m.startShell()
 		}
 	case paneContexts:
 		switch k {
 		case "n":
-			return m.later("Set namespace")
+			return m.startNamespace()
 		case "d":
-			return m.later("Delete context")
+			return m.startDeleteContext()
 		}
 	}
 	return nil
-}
-
-// later reports an action whose dialog is not built yet.
-func (m *Model) later(what string) tea.Cmd {
-	return m.say(statusInfo, what+" is not available yet")
 }
 
 // availablePanes lists the panes that can take focus at the current size.

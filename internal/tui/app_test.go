@@ -659,7 +659,7 @@ func TestStatusLifecycle(t *testing.T) {
 	mustContain(t, plain(m), "✗ Could not use legacy")
 	m = keys(m, "r")
 	mustNotContain(t, plain(m), "Could not use legacy")
-	mustContain(t, plain(m), "Rename is not available yet")
+	mustContain(t, plain(m), "Rename project", "New name for dev")
 }
 
 func TestReloadKey(t *testing.T) {

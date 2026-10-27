@@ -208,7 +208,10 @@ func (m Model) overlay(body string, d dialog, lay layoutInfo) string {
 		maxW = m.w
 	}
 	maxH := max(3, lay.bodyH-2)
-	box := d.view(&m, maxW, maxH)
+	if wd, ok := d.(interface{ wide() bool }); ok && wd.wide() {
+		maxW, maxH = m.w, lay.bodyH // a full-body screen, not a small dialog
+	}
+	box := clipBox(d.view(&m, maxW, maxH), lay.bodyH)
 	ow, oh := lipgloss.Size(box)
 	x, y := max(0, (m.w-ow)/2), max(0, (lay.bodyH-oh)/2)
 	base := m.block(body, m.w, lay.bodyH)
@@ -229,4 +232,15 @@ func (m Model) tilde(p string) string {
 		}
 	}
 	return p
+}
+
+// clipBox keeps a box that is taller than h inside the body by dropping rows
+// from the middle, so the top title and the bottom border always show.
+func clipBox(box string, h int) string {
+	lines := strings.Split(box, "\n")
+	if len(lines) <= h || h < 2 {
+		return box
+	}
+	out := append([]string{}, lines[:h-1]...)
+	return strings.Join(append(out, lines[len(lines)-1]), "\n")
 }

@@ -85,6 +85,9 @@ type inputDialog struct {
 	validate     func(m *Model, v string) string // "" when valid, else the message to show
 	submit       func(m *Model, value string) tea.Cmd
 	err          string
+	allowEmpty   bool // enter accepts an empty value (it clears something)
+	// note, when set, adds a row under the input: dim text, or a warning.
+	note func(m *Model, v string) (text string, warn bool)
 }
 
 func newInputDialog(m *Model, title, label, initial string,
@@ -107,7 +110,7 @@ func (d *inputDialog) update(m *Model, msg tea.Msg) (dialog, tea.Cmd) {
 			return nil, nil
 		case "enter":
 			v := d.in.Value()
-			if v == "" || d.validate(m, v) != "" {
+			if (v == "" && !d.allowEmpty) || (v != "" && d.validate(m, v) != "") {
 				return d, nil
 			}
 			return nil, d.submit(m, v)
@@ -133,7 +136,18 @@ func (d *inputDialog) view(m *Model, maxW, _ int) string {
 	if d.err != "" {
 		errRow = m.sty.err.Render(ansi.Truncate(m.gl.fail+" "+d.err, iw, m.gl.ell))
 	}
-	return m.dialogBox(d.title, []string{d.label, d.in.View(), errRow}, w, false, 1)
+	body := []string{d.label, d.in.View(), errRow}
+	if d.note != nil {
+		if text, warn := d.note(m, d.in.Value()); text != "" {
+			st := m.sty.dim
+			if warn {
+				st = m.sty.warn
+				text = m.gl.warn + " " + text
+			}
+			body = append(body, st.Render(ansi.Truncate(text, iw, m.gl.ell)))
+		}
+	}
+	return m.dialogBox(d.title, body, w, false, 1)
 }
 
 func (d *inputDialog) hints() []hint {
@@ -143,16 +157,25 @@ func (d *inputDialog) hints() []hint {
 // validName checks a new project name: syntax, then that it is free. It
 // returns the message to show, or "" when the name is fine.
 func (m *Model) validName(name string) string {
-	if err := store.ValidateName(name); err != nil {
-		if strings.Contains(err.Error(), "must not end in") {
-			return "Names must not end in .lock, .bak, .orig, .swp or ~"
-		}
-		return "Use letters, digits, . _ - (max 64)"
+	if msg := nameSyntax(name); msg != "" {
+		return msg
 	}
 	for _, p := range m.projects {
 		if p.Name == name {
 			return "Project " + name + " already exists"
 		}
+	}
+	return ""
+}
+
+// nameSyntax checks that name is an acceptable project name, ignoring whether
+// it is taken. It returns the message to show, or "".
+func nameSyntax(name string) string {
+	if err := store.ValidateName(name); err != nil {
+		if strings.Contains(err.Error(), "must not end in") {
+			return "Names must not end in .lock, .bak, .orig, .swp or ~"
+		}
+		return "Use letters, digits, . _ - (max 64)"
 	}
 	return ""
 }
