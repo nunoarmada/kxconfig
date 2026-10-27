@@ -2,7 +2,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -10,6 +9,7 @@ import (
 
 	"github.com/nunoarmada/kxconfig/internal/cli"
 	"github.com/nunoarmada/kxconfig/internal/store"
+	"github.com/nunoarmada/kxconfig/internal/tui"
 )
 
 var version = "dev"
@@ -20,16 +20,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "kx: %v\n", err)
 		os.Exit(1)
 	}
+	st, env := store.New(root), store.EnvFromOS()
 	d := cli.Deps{
-		Store:   store.New(root),
-		Env:     store.EnvFromOS(),
+		Store:   st,
+		Env:     env,
 		In:      os.Stdin,
 		Out:     os.Stdout,
 		Err:     os.Stderr,
 		IsTTY:   term.IsTerminal(int(os.Stdin.Fd())),
 		Version: version,
-		// Replaced by the real TUI in a later task.
-		RunTUI: func() error { return errors.New("interactive UI not built yet") },
+		RunTUI:  func() error { return tui.Run(st, env) },
 	}
 	os.Exit(cli.Run(d, os.Args[1:]))
 }
