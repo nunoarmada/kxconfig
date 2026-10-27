@@ -246,8 +246,10 @@ func TestMergeOverwriteAndSkip(t *testing.T) {
 	if got.Clusters["default"].Server != "https://old.example" || got.Contexts["default"].Namespace != "a" {
 		t.Error("skip did not keep master")
 	}
-	if len(rep.Skipped) != 3 {
-		t.Errorf("Skipped = %v", rep.Skipped)
+	// The incoming context references skipped entities, so it is dropped
+	// rather than skipped (see TestMergeSkippedClusterDropsReferencingContext).
+	if len(rep.Skipped) != 2 || len(rep.Dropped) != 1 {
+		t.Errorf("Skipped = %v, Dropped = %v", rep.Skipped, rep.Dropped)
 	}
 }
 
@@ -257,7 +259,7 @@ func TestMergePerItemOverridesDefault(t *testing.T) {
 		Default: PolicyFail,
 		PerItem: map[EntityRef]ConflictPolicy{
 			ref(KindCluster, "default"): PolicyOverwrite,
-			ref(KindUser, "default"):    PolicySkip,
+			ref(KindUser, "default"):    PolicyOverwrite,
 			ref(KindContext, "default"): PolicyRename,
 		},
 	}
@@ -268,8 +270,8 @@ func TestMergePerItemOverridesDefault(t *testing.T) {
 	if got.Clusters["default"].Server != "https://new.example" {
 		t.Error("cluster not overwritten")
 	}
-	if got.AuthInfos["default"].Token != "old-token" {
-		t.Error("user not skipped")
+	if got.AuthInfos["default"].Token != "new-token" {
+		t.Error("user not overwritten")
 	}
 	if rep.Renamed[ref(KindContext, "default")] != "default-2" || got.Contexts["default-2"] == nil {
 		t.Errorf("context not renamed: %+v", rep.Renamed)
@@ -340,5 +342,116 @@ func TestParsePolicy(t *testing.T) {
 	}
 	if _, err := ParsePolicy("bogus"); err == nil {
 		t.Error("expected error for bogus policy")
+	}
+}
+
+func TestSummarizeServerRedaction(t *testing.T) {
+	cases := map[string]string{
+		"https://user:pw@h:6443/p?token=x#f": "https://h:6443/p",
+		"https://h:6443":                     "https://h:6443",
+		"mailto:secret@example.com":          "(unparseable server)",
+		"host-without-scheme":                "(unparseable server)",
+		"https:///p?token=x":                 "(unparseable server)",
+		"":                                   "(unparseable server)",
+	}
+	for in, want := range cases {
+		cfg := mk("")
+		addCluster(cfg, "c", in)
+		if got := Summarize(ref(KindCluster, "c"), cfg); got != want {
+			t.Errorf("Summarize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMergeSkippedClusterDropsReferencingContext(t *testing.T) {
+	master, incoming := conflictPair()
+	// User and context identical-by-name; only cluster conflicts and is skipped.
+	opts := MergeOptions{PerItem: map[EntityRef]ConflictPolicy{ref(KindCluster, "default"): PolicySkip}, Default: PolicyOverwrite}
+	got, rep, err := Merge(master, incoming, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(rep.Dropped, []EntityRef{ref(KindContext, "default")}) {
+		t.Errorf("Dropped = %v", rep.Dropped)
+	}
+	if got.Contexts["default"].Namespace != "a" || got.Contexts["default"].Cluster != "default" {
+		t.Errorf("master context changed: %+v", got.Contexts["default"])
+	}
+	if got.Clusters["default"].Server != "https://old.example" {
+		t.Error("skipped cluster changed")
+	}
+}
+
+func TestMergeSkippedUserDropsNewContext(t *testing.T) {
+	master := mk("")
+	addUser(master, "u", "master-token")
+	incoming := mk("")
+	addCluster(incoming, "c", "https://c")
+	addUser(incoming, "u", "incoming-token")
+	addCtx(incoming, "fresh", "c", "u", "")
+	got, rep, err := Merge(master, incoming, MergeOptions{Default: PolicySkip})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Contexts["fresh"] != nil {
+		t.Error("context bound to master's user must not be added")
+	}
+	if !reflect.DeepEqual(rep.Dropped, []EntityRef{ref(KindContext, "fresh")}) {
+		t.Errorf("Dropped = %v", rep.Dropped)
+	}
+}
+
+func TestMergeDropsContextWithUndefinedRefs(t *testing.T) {
+	master := mk("")
+	addUser(master, "u", "t")
+	addCluster(master, "c", "https://c")
+	incoming := mk("")
+	addCluster(incoming, "c", "https://c")
+	addCtx(incoming, "b-undef-user", "c", "u", "") // u not in incoming
+	addCtx(incoming, "a-undef-cluster", "zz", "", "")
+	addCtx(incoming, "ok", "c", "", "")
+	got, rep, err := Merge(master, incoming, MergeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []EntityRef{ref(KindContext, "a-undef-cluster"), ref(KindContext, "b-undef-user")}
+	if !reflect.DeepEqual(rep.Dropped, want) {
+		t.Errorf("Dropped = %v, want %v", rep.Dropped, want)
+	}
+	if got.Contexts["ok"] == nil || got.Contexts["b-undef-user"] != nil || got.Contexts["a-undef-cluster"] != nil {
+		t.Errorf("contexts = %v", got.Contexts)
+	}
+}
+
+func TestMergeIntoEmptyMasterInitialisesMaps(t *testing.T) {
+	incoming := mk("")
+	addCluster(incoming, "c", "https://c")
+	addUser(incoming, "u", "t")
+	addCtx(incoming, "x", "c", "u", "")
+	got, _, err := Merge(&api.Config{}, incoming, MergeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Clusters) != 1 || len(got.AuthInfos) != 1 || len(got.Contexts) != 1 {
+		t.Errorf("got %+v", got)
+	}
+}
+
+func TestConflictSummariesDifferForSameAuthKind(t *testing.T) {
+	master, incoming := conflictPair() // both users are "token" with different values
+	cs := DetectConflicts(master, incoming)
+	var u Conflict
+	for _, c := range cs {
+		if c.Ref.Kind == KindUser {
+			u = c
+		}
+	}
+	if u.Existing == u.Incoming {
+		t.Errorf("summaries identical: %q", u.Existing)
+	}
+	for _, s := range []string{u.Existing, u.Incoming} {
+		if strings.Contains(s, "old-token") || strings.Contains(s, "new-token") {
+			t.Errorf("leak: %q", s)
+		}
 	}
 }

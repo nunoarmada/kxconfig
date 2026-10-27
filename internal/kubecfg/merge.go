@@ -69,8 +69,13 @@ type MergeOptions struct {
 // that resolved to PolicyFail.
 type MergeReport struct {
 	Added, Unchanged, Overwritten, Skipped []EntityRef
-	Renamed                                map[EntityRef]string
-	Conflicts                              []Conflict
+	// Dropped lists incoming contexts that were not merged because they
+	// reference a cluster/user that was skipped or is not defined in the
+	// incoming config; adding them would bind them to the master's entity of
+	// the same name.
+	Dropped   []EntityRef
+	Renamed   map[EntityRef]string
+	Conflicts []Conflict
 }
 
 // ErrConflicts is returned by Merge when at least one conflict resolves to
@@ -90,8 +95,7 @@ func DetectConflicts(master, incoming *api.Config) []Conflict {
 			}
 			i, _ := entity(incoming, k, name)
 			if !equal(m, i) {
-				r := EntityRef{k, name}
-				out = append(out, Conflict{Ref: r, Existing: Summarize(r, master), Incoming: Summarize(r, incoming)})
+				out = append(out, newConflict(EntityRef{k, name}, master, incoming))
 			}
 		}
 	}
@@ -108,6 +112,16 @@ func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeR
 		return nil, MergeReport{}, err
 	}
 	result := master.DeepCopy()
+	if result.Clusters == nil {
+		result.Clusters = map[string]*api.Cluster{}
+	}
+	if result.AuthInfos == nil {
+		result.AuthInfos = map[string]*api.AuthInfo{}
+	}
+	if result.Contexts == nil {
+		result.Contexts = map[string]*api.Context{}
+	}
+	skipped := map[EntityRef]bool{}
 	rep := MergeReport{Renamed: map[EntityRef]string{}}
 
 	used := map[Kind]map[string]bool{}
@@ -126,6 +140,10 @@ func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeR
 			r := EntityRef{k, name}
 			inc, _ := entity(incoming, k, name)
 			if ctx, ok := inc.(*api.Context); ok {
+				if danglingRef(ctx, incoming, skipped) {
+					rep.Dropped = append(rep.Dropped, r)
+					continue
+				}
 				rewriteContext(ctx, rep.Renamed)
 			}
 			cur, exists := entity(master, k, name)
@@ -141,6 +159,7 @@ func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeR
 					put(result, k, name, inc)
 					rep.Overwritten = append(rep.Overwritten, r)
 				case PolicySkip:
+					skipped[r] = true
 					rep.Skipped = append(rep.Skipped, r)
 				case PolicyRename:
 					nn := freeName(used[k], name)
@@ -148,9 +167,7 @@ func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeR
 					put(result, k, nn, inc)
 					rep.Renamed[r] = nn
 				default:
-					rep.Conflicts = append(rep.Conflicts, Conflict{
-						Ref: r, Existing: Summarize(r, master), Incoming: Summarize(r, incoming),
-					})
+					rep.Conflicts = append(rep.Conflicts, newConflict(r, master, incoming))
 				}
 			}
 		}
@@ -185,6 +202,32 @@ func Summarize(ref EntityRef, cfg *api.Config) string {
 	return ""
 }
 
+// danglingRef reports whether ctx references a cluster or user that is not
+// defined in incoming or whose incoming definition was skipped.
+func danglingRef(ctx *api.Context, incoming *api.Config, skipped map[EntityRef]bool) bool {
+	if ctx.Cluster != "" {
+		if incoming.Clusters[ctx.Cluster] == nil || skipped[EntityRef{KindCluster, ctx.Cluster}] {
+			return true
+		}
+	}
+	if ctx.AuthInfo != "" {
+		if incoming.AuthInfos[ctx.AuthInfo] == nil || skipped[EntityRef{KindUser, ctx.AuthInfo}] {
+			return true
+		}
+	}
+	return false
+}
+
+// newConflict builds a Conflict whose two summaries always differ, even when
+// the entities differ only in secret material.
+func newConflict(r EntityRef, master, incoming *api.Config) Conflict {
+	c := Conflict{Ref: r, Existing: Summarize(r, master), Incoming: Summarize(r, incoming)}
+	if c.Existing == c.Incoming {
+		c.Incoming += " (differs)"
+	}
+	return c
+}
+
 func authKinds(u *api.AuthInfo) string {
 	var kinds []string
 	if u.Exec != nil {
@@ -209,13 +252,14 @@ func authKinds(u *api.AuthInfo) string {
 	return strings.Join(kinds, ", ")
 }
 
+// redactServer keeps only scheme://host[:port]/path, dropping userinfo, query,
+// fragment and opaque parts.
 func redactServer(server string) string {
 	u, err := url.Parse(server)
-	if err != nil {
+	if err != nil || u.Scheme == "" || u.Host == "" || u.Opaque != "" {
 		return "(unparseable server)"
 	}
-	u.User = nil
-	return u.String()
+	return (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
 }
 
 func orEmpty(c *api.Config) *api.Config {
