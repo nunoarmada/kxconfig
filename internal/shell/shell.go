@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -85,14 +87,37 @@ outer:
 }
 
 // Spawn runs the subshell attached to the terminal and removes the copy when
-// it exits. A non-zero exit status of the shell is not an error.
+// it exits. A non-zero exit status of the shell is not an error. While the
+// shell runs, kx ignores SIGINT and SIGQUIT (the terminal delivers them to the
+// shell, and they must not kill kx before it cleans up) and forwards SIGHUP
+// and SIGTERM to the shell, then still removes the copy.
 func Spawn(s *store.Store, project string, env store.Env) error {
 	cmd, cleanup, err := Command(s, project, env)
 	if err != nil {
 		return err
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	runErr := cmd.Run()
+
+	sigs := make(chan os.Signal, 4)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGTERM)
+	defer signal.Stop(sigs)
+	if err := cmd.Start(); err != nil {
+		return errors.Join(err, cleanup())
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	var runErr error
+wait:
+	for {
+		select {
+		case sig := <-sigs:
+			if sig == syscall.SIGHUP || sig == syscall.SIGTERM {
+				_ = cmd.Process.Signal(sig)
+			}
+		case runErr = <-done:
+			break wait
+		}
+	}
 	// The user's last command may have failed; that is not a kx failure.
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {

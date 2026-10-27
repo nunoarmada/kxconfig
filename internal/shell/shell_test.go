@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/nunoarmada/kxconfig/v2/internal/kubecfg"
 	"github.com/nunoarmada/kxconfig/v2/internal/store"
@@ -179,6 +181,100 @@ func TestSpawnIgnoresShellExitStatus(t *testing.T) {
 	t.Setenv("SHELL", fail)
 	if err := Spawn(s, "prod", store.Env{}); err != nil {
 		t.Fatalf("Spawn = %v, want nil for non-zero shell exit", err)
+	}
+	if _, err := os.Stat(s.ShellCopyPath(os.Getpid(), "prod")); !os.IsNotExist(err) {
+		t.Fatal("copy not cleaned up")
+	}
+}
+
+// signalSelf sends sig to this test process, which Spawn must absorb while a
+// shell runs.
+func signalSelf(t *testing.T, sig os.Signal) {
+	t.Helper()
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Signal(sig); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// slowShell is a shell that signals readiness and then waits; it dies from
+// SIGTERM/SIGHUP (it execs sleep, so the signal reaches the process itself).
+func slowShell(t *testing.T) (script, ready string) {
+	t.Helper()
+	dir := t.TempDir()
+	script, ready = filepath.Join(dir, "slow.sh"), filepath.Join(dir, "ready")
+	body := "#!/bin/sh\ntouch " + ready + "\nexec sleep 30\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return script, ready
+}
+
+func waitFor(t *testing.T, path string) {
+	t.Helper()
+	for range 400 {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("%s never appeared", path)
+}
+
+func TestSpawnForwardsTermAndStillCleansUp(t *testing.T) {
+	for _, sig := range []os.Signal{syscall.SIGTERM, syscall.SIGHUP} {
+		t.Run(sig.String(), func(t *testing.T) {
+			s := newStore(t)
+			script, ready := slowShell(t)
+			t.Setenv("SHELL", script)
+			done := make(chan error, 1)
+			go func() { done <- Spawn(s, "prod", store.Env{}) }()
+			waitFor(t, ready)
+			signalSelf(t, sig)
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatalf("Spawn = %v", err)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("Spawn did not return after the signal reached the shell")
+			}
+			if _, err := os.Stat(s.ShellCopyPath(os.Getpid(), "prod")); !os.IsNotExist(err) {
+				t.Fatal("copy not cleaned up after the signal")
+			}
+		})
+	}
+}
+
+func TestSpawnIgnoresInterruptWhileShellRuns(t *testing.T) {
+	s := newStore(t)
+	dir := t.TempDir()
+	ready, release := filepath.Join(dir, "ready"), filepath.Join(dir, "release")
+	script := filepath.Join(dir, "sh.sh")
+	body := "#!/bin/sh\ntouch " + ready + "\nwhile [ ! -e " + release + " ]; do sleep 0.05; done\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", script)
+	done := make(chan error, 1)
+	go func() { done <- Spawn(s, "prod", store.Env{}) }()
+	waitFor(t, ready)
+	signalSelf(t, syscall.SIGINT) // would kill kx (and leak the copy) if not ignored
+	signalSelf(t, syscall.SIGQUIT)
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case err := <-done:
+		t.Fatalf("Spawn returned early: %v", err)
+	default:
+	}
+	if err := os.WriteFile(release, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Spawn = %v", err)
 	}
 	if _, err := os.Stat(s.ShellCopyPath(os.Getpid(), "prod")); !os.IsNotExist(err) {
 		t.Fatal("copy not cleaned up")
