@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-func errorsIs(err, target error) bool { return errors.Is(err, target) }
-
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ func TestValidateName(t *testing.T) {
 		}
 	}
 	for _, n := range bad {
-		if err := ValidateName(n); !errorsIs(err, ErrInvalidName) {
+		if err := ValidateName(n); !errors.Is(err, ErrInvalidName) {
 			t.Errorf("ValidateName(%q) = %v, want ErrInvalidName", n, err)
 		}
 	}

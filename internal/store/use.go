@@ -115,8 +115,10 @@ func (s *Store) Use(name string) error {
 		if !same {
 			return ErrForeignConfig
 		}
-		if _, err := s.Backups.Create(initialProject, "adopt", s.ConfigPath()); err != nil {
-			return fmt.Errorf("back up %s: %w", s.ConfigPath(), err)
+		// Use has no result to carry a warning; a failed prune only leaves
+		// old backups behind and the new one exists, so ignoring it is safe.
+		if _, _, err := s.backup(initialProject, "adopt", s.ConfigPath()); err != nil {
+			return err
 		}
 	}
 
@@ -199,8 +201,9 @@ func (s *Store) AdoptForeign(importAs string) error {
 			return err
 		}
 	}
-	if _, err := s.Backups.Create(initialProject, "adopt", s.ConfigPath()); err != nil {
-		return fmt.Errorf("back up %s: %w", s.ConfigPath(), err)
+	// Same as in Use: the prune warning is safe to ignore.
+	if _, _, err := s.backup(initialProject, "adopt", s.ConfigPath()); err != nil {
+		return err
 	}
 	if importAs != "" {
 		if err := fsutil.CopyFile(s.ConfigPath(), s.ProjectPath(importAs)); err != nil {
