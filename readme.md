@@ -144,7 +144,7 @@ or in zsh: `PROMPT='${KX_PROJECT:+[$KX_PROJECT] }'$PROMPT`.
 |---|---|
 | `kxswap dev` | `kx use dev` |
 | `kxconfig -p dev -m file.yaml` | `kx import file.yaml -p dev` |
-| `kxconfig -p dev -m file.yaml -x` | `kx import file.yaml -p dev --replace` |
+| `kxconfig -p dev -x file.yaml` | `kx import file.yaml -p dev --replace` |
 | `kxconfig -p dev -d ctx` | `kx rm-ctx ctx -p dev` |
 
 - Your `~/.kube/config-<project>` files keep working as projects. Existing `~/.kube/backups/*.bak` files from 1.x are left untouched; kx backups live in `~/.kube/kx/backups/`.

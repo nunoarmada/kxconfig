@@ -2,21 +2,26 @@ name: release
 
 # GoReleaser runs in this workflow, not in a separate one: events created with
 # GITHUB_TOKEN (the release and its tag) do not trigger other workflows.
-# Releases are cut from main only when a release PR is merged, so CI gating is
-# provided by branch protection on that PR instead of a workflow_run chain.
+# Releases are cut from main only when the release PR is merged; the commits it
+# releases already passed CI on their own PRs and pushes to main.
 on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
@@ -32,6 +37,8 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
