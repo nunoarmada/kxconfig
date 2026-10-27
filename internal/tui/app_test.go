@@ -187,7 +187,8 @@ func TestEmptyState(t *testing.T) {
 	}
 	m = keys(m, "ctrl+r")
 	v = plain(m)
-	mustContain(t, v, "a   adopt the current ~/.kube/config as a project", "not managed by kx yet")
+	mustContain(t, v, "a   adopt the current ~/.kube/config as a project")
+	mustNotContain(t, v, "not managed by kx yet") // the empty state already offers adopt
 	m = keys(m, "a")
 	mustContain(t, plain(m), "Import current config", "> default")
 	m = keys(m, "enter")
@@ -522,7 +523,7 @@ func TestAdoptionDialog(t *testing.T) {
 		root, m := setup(t)
 		v := plain(m)
 		mustContain(t, v, "Use prod?", "~/.kube/config is not managed by kx.", "~/.kube/kx/backups/_initial first.",
-			"i    Import it as a new project (name)", "r    Replace it with a link to prod", "esc  Cancel",
+			"i    Keep it as a new project (you name it), then use prod", "r    Replace it with a link to prod", "esc  Cancel",
 			"i import as project  r replace (backed up)  esc cancel")
 		fi, _ := os.Lstat(filepath.Join(root, "config"))
 		if fi.Mode()&os.ModeSymlink != 0 {
@@ -614,7 +615,7 @@ func TestShellMode(t *testing.T) {
 	mustContain(t, plain(m), "⚠ Already inside a kx shell")
 
 	// Another project's contexts are refused: nothing else may be edited.
-	m = keys(m, "tab", "enter") // cursor is on prod
+	m = keys(m, "k", "tab", "enter") // the shell starts on staging; move to prod
 	mustContain(t, plain(m), "Inside a kx shell only staging can be changed; exit the shell first")
 	if c, _ := kubecfg.Load(filepath.Join(root, "config-prod")); c.CurrentContext != "prod-eu" {
 		t.Errorf("prod master edited from inside a shell: %q", c.CurrentContext)

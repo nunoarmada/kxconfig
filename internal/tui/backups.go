@@ -101,12 +101,8 @@ func (d *backupsDialog) confirmRestore(m *Model) dialog {
 	return c
 }
 
-// wide lets the list use more than the usual dialog width: a backup ID is
-// 27 columns, so ID, age, date and operation need about 70.
-func (d *backupsDialog) wide() bool { return true }
-
 func (d *backupsDialog) view(m *Model, maxW, maxH int) string {
-	w := min(maxW, 78)
+	w := min(maxW, 72)
 	if m.w < 50 {
 		w = maxW
 	}
@@ -116,17 +112,17 @@ func (d *backupsDialog) view(m *Model, maxW, maxH int) string {
 		return m.dialogBox(title, []string{"No backups for " + safetext.Clean(d.project) + " yet."}, w, false, 1)
 	}
 
-	idW, opW, whenW := 0, 2, 8
+	// The ID already ends in the operation, so there is no OP column.
+	idW, whenW := 0, 8
 	for _, b := range d.list {
 		idW = max(idW, lipgloss.Width(safetext.Clean(b.ID)))
-		opW = max(opW, lipgloss.Width(safetext.Clean(b.Op)))
 	}
 	// The date shows at 80 columns and up, when it fits next to the rest.
-	absolute := m.w >= 80 && 2+idW+2+whenW+2+len("2006-01-02 15:04")+2+opW <= iw
+	absolute := m.w >= 80 && 2+idW+2+whenW+2+len("2006-01-02 15:04") <= iw
 	if absolute {
 		whenW += 2 + len("2006-01-02 15:04")
 	}
-	head := m.sty.dim.Render(m.fit("  "+padRight("ID", idW)+"  "+padRight("WHEN", whenW)+"  OP", iw))
+	head := m.sty.dim.Render(m.fit("  "+padRight("ID", idW)+"  "+padRight("WHEN", whenW), iw))
 
 	rows := max(1, maxH-2-2-1) // borders, vertical padding, header
 	if m.w < 50 {
@@ -156,8 +152,7 @@ func (d *backupsDialog) view(m *Model, maxW, maxH int) string {
 		lines = append(lines, m.row(iw, mode,
 			cell{cur + " ", m.sty.plain},
 			cell{padRight(safetext.Clean(b.ID), idW) + "  ", m.sty.plain},
-			cell{when + "  ", m.sty.plain},
-			cell{safetext.Clean(b.Op), m.sty.plain}))
+			cell{when, m.sty.plain}))
 	}
 	return m.dialogBox(title, lines, w, false, 1)
 }

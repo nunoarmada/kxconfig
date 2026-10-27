@@ -107,7 +107,7 @@ func (a *app) requireProject(name string) error {
 	}
 	if _, err := os.Stat(a.Store.ProjectPath(name)); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%w: %s", store.ErrNotFound, name)
+			return fmt.Errorf("%w: %s", store.ErrNotFound, safetext.Clean(name))
 		}
 		return err
 	}

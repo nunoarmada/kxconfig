@@ -121,7 +121,7 @@ func (a *app) warnLiveShells(project string) {
 		return
 	}
 	if len(pids) > 0 {
-		_, _ = fmt.Fprintf(a.Err, "warning: %d kx shell(s) are running for %s (pids %v); they keep their own copy and will not see this change\n", len(pids), project, pids)
+		_, _ = fmt.Fprintf(a.Err, "warning: %d kx shell(s) are running for %s (pids %v); they keep their own copy and will not see this change\n", len(pids), safetext.Clean(project), pids)
 	}
 }
 

@@ -13,7 +13,8 @@ import (
 type colorMode int
 
 const (
-	modeTrue colorMode = iota // TrueColor and ANSI256: the palette as is
+	modeTrue colorMode = iota // TrueColor: the palette as is
+	mode256                   // ANSI256: the palette, with explicit selection colours
 	modeANSI                  // 16 colours: selection is reverse video
 	modeMono                  // NO_COLOR / no colour at all: glyphs, bold, underline and reverse only
 )
@@ -22,6 +23,8 @@ func modeFor(p colorprofile.Profile) colorMode {
 	switch p {
 	case colorprofile.ANSI:
 		return modeANSI
+	case colorprofile.ANSI256:
+		return mode256
 	case colorprofile.Ascii, colorprofile.NoTTY:
 		return modeMono
 	default:
@@ -65,6 +68,13 @@ type styles struct {
 
 func newStyles(isDark bool, p colorprofile.Profile) styles {
 	s := styles{mode: modeFor(p), pal: newPalette(isDark)}
+	if s.mode == mode256 {
+		// Pick palette cells directly: a truecolor value downsampled to 256
+		// colours can lose the contrast the selection needs.
+		ld := lipgloss.LightDark(isDark)
+		s.pal.selBg = ld(lipgloss.ANSIColor(189), lipgloss.ANSIColor(237))
+		s.pal.selFg = ld(lipgloss.ANSIColor(17), lipgloss.ANSIColor(255))
+	}
 	fg := func(c color.Color) lipgloss.Style {
 		if s.mode == modeMono {
 			return lipgloss.NewStyle()
@@ -76,6 +86,9 @@ func newStyles(isDark bool, p colorprofile.Profile) styles {
 	s.accent = fg(s.pal.accent).Bold(true)
 	s.active = fg(s.pal.active)
 	s.dim = fg(s.pal.dim)
+	if s.mode == modeMono {
+		s.dim = lipgloss.NewStyle().Faint(true) // no colour: de-emphasise with the weight
+	}
 	s.warn = fg(s.pal.warn)
 	s.err = fg(s.pal.err)
 	s.succ = fg(s.pal.success)
@@ -90,11 +103,15 @@ func newStyles(isDark bool, p colorprofile.Profile) styles {
 // background fill in colour terminals, reverse video otherwise. A cell that
 // carries its own foreground keeps it.
 func (s styles) selected(st lipgloss.Style) lipgloss.Style {
-	if s.mode != modeTrue {
+	if s.mode == modeANSI || s.mode == modeMono {
 		return st.Reverse(true).Bold(true)
 	}
 	st = st.Background(s.pal.selBg).Bold(true)
-	if _, none := st.GetForeground().(lipgloss.NoColor); none {
+	// The dim token is unreadable on the selection fill: use the selection
+	// foreground (bold keeps the emphasis).
+	if fg := st.GetForeground(); fg == s.pal.dim {
+		st = st.Foreground(s.pal.selFg)
+	} else if _, none := fg.(lipgloss.NoColor); none {
 		st = st.Foreground(s.pal.selFg)
 	}
 	return st

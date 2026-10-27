@@ -108,9 +108,10 @@ func New(s *store.Store, env store.Env) Model {
 		m.loadErr = err
 		return m
 	}
-	// Start on the active project, as that is what the user most likely wants.
+	// Start on the shell's own project inside a kx shell, else on the active
+	// one: that is what the user most likely wants.
 	for i, p := range m.projects {
-		if p.Active {
+		if (m.env.InShell && p.Name == m.env.Project) || (!m.env.InShell && p.Active) {
 			m.plist.cursor = i
 			m.loadSelected()
 			m.settle()

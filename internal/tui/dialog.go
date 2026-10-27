@@ -85,7 +85,8 @@ type inputDialog struct {
 	validate     func(m *Model, v string) string // "" when valid, else the message to show
 	submit       func(m *Model, value string) tea.Cmd
 	err          string
-	allowEmpty   bool // enter accepts an empty value (it clears something)
+	allowEmpty   bool   // enter accepts an empty value (it clears something)
+	help         string // optional dim row under the input, always shown
 	// note, when set, adds a row under the input: dim text, or a warning.
 	note func(m *Model, v string) (text string, warn bool)
 }
@@ -137,6 +138,9 @@ func (d *inputDialog) view(m *Model, maxW, _ int) string {
 		errRow = m.sty.err.Render(ansi.Truncate(m.gl.fail+" "+d.err, iw, m.gl.ell))
 	}
 	body := []string{d.label, d.in.View(), errRow}
+	if d.help != "" {
+		body = append(body, m.sty.dim.Render(ansi.Truncate(d.help, iw, m.gl.ell)))
+	}
 	if d.note != nil {
 		if text, warn := d.note(m, d.in.Value()); text != "" {
 			st := m.sty.dim
@@ -233,10 +237,20 @@ func (d *adoptDialog) view(m *Model, maxW, _ int) string {
 	cfg := safetext.Clean(m.tilde(m.store.ConfigPath()))
 	backups := safetext.Clean(m.tilde(m.store.Backups.Dir))
 	body := wrap(cfg+" is not managed by kx. It will be backed up to "+backups+"/_initial first.", iw)
-	body = append(body, "",
-		m.sty.accent.Render("i")+"    Import it as a new project (name)",
-		m.sty.accent.Render("r")+"    Replace it with a link to "+safetext.Clean(d.target),
-		m.sty.accent.Render("esc")+"  Cancel")
+	body = append(body, "")
+	for _, it := range [][2]string{
+		{"i", "Keep it as a new project (you name it), then use " + safetext.Clean(d.target)},
+		{"r", "Replace it with a link to " + safetext.Clean(d.target)},
+		{"esc", "Cancel"},
+	} {
+		for n, l := range wordWrap(it[1], max(8, iw-5)) {
+			if n == 0 {
+				body = append(body, m.sty.accent.Render(it[0])+strings.Repeat(" ", 5-lipgloss.Width(it[0]))+l)
+			} else {
+				body = append(body, "     "+l) // hang under the text
+			}
+		}
+	}
 	return m.dialogBox("Use "+safetext.Clean(d.target)+"?", body, w, false, 1)
 }
 

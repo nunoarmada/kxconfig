@@ -120,15 +120,19 @@ func (m Model) centered(lay layoutInfo, lines []string) string {
 // emptyState is shown when there are no projects at all.
 func (m Model) emptyState(lay layoutInfo) string {
 	key := func(k string) string { return "  " + m.sty.accent.Render(k) + "   " }
-	lines := []string{
-		m.sty.title.Render("No projects yet"),
-		"",
-		"kx keeps one kubeconfig per project in " + m.tilde(m.store.ProjectPath("<name>")) + ".",
-		"",
-		key("i") + "import a kubeconfig file",
-	}
+	bw := max(10, min(m.w-4, 64))
+	lines := []string{m.sty.title.Render("No projects yet"), ""}
+	lines = append(lines, wordWrap("kx keeps one kubeconfig per project in "+m.tilde(m.store.ProjectPath("<name>"))+".", bw)...)
+	lines = append(lines, "", key("i")+"import a kubeconfig file")
 	if m.link == store.LinkForeignFile {
-		lines = append(lines, key("a")+"adopt the current "+m.tilde(m.store.ConfigPath())+" as a project")
+		w := max(8, bw-6)
+		for i, l := range wordWrap("adopt the current "+m.tilde(m.store.ConfigPath())+" as a project", w) {
+			if i == 0 {
+				lines = append(lines, key("a")+l)
+			} else {
+				lines = append(lines, "      "+l)
+			}
+		}
 	}
 	lines = append(lines, key("q")+"quit")
 	return m.centered(lay, lines)
@@ -146,7 +150,7 @@ func (m Model) header(lay layoutInfo) string {
 		}
 		left += m.sty.warn.Bold(true).Render(m.gl.shellMark+" shell: "+safetext.Clean(m.env.Project)) +
 			m.sty.dim.Render("  "+m.gl.dot+"  global: ") + global
-	case lay.mode == layoutNarrow:
+	case lay.mode == layoutNarrow && len(m.projects) > 0:
 		left = " " + m.sty.accent.Render("kx") + " " + m.sty.dim.Render(m.gl.crumb) + " "
 		if m.focus == paneProjects || m.cur.name == "" {
 			left += m.sty.title.Render(paneProjects.String())
@@ -170,16 +174,24 @@ func (m Model) header(lay layoutInfo) string {
 func (m Model) bannerRow(lay layoutInfo) string {
 	text, warn := m.bannerText()
 	text = safetext.Clean(text)
-	if m.w < 80 {
+	avail := max(m.w-2, 0)
+	if lipgloss.Width(text) > avail { // drop what follows the first sentence
 		if i := strings.Index(text, ". "); i >= 0 {
 			text = text[:i+1]
 		}
+	}
+	if lipgloss.Width(text) > avail { // still too long: cut at a word, never inside one
+		cut := ansi.Truncate(text, max(avail-1, 0), "")
+		if i := strings.LastIndex(cut, " "); i > 0 && cut != text {
+			cut = cut[:i]
+		}
+		text = strings.TrimRight(cut, " ") + m.gl.ell
 	}
 	st := m.sty.dim
 	if warn {
 		st = m.sty.warn
 	}
-	return st.Render(" " + ansi.Truncate(text, max(m.w-2, 0), m.gl.ell))
+	return st.Render(" " + ansi.Truncate(text, avail, m.gl.ell))
 }
 
 // statusRow is the reserved row above the hint bar.
@@ -243,4 +255,22 @@ func clipBox(box string, h int) string {
 	}
 	out := append([]string{}, lines[:h-1]...)
 	return strings.Join(append(out, lines[len(lines)-1]), "\n")
+}
+
+// wordWrap breaks s at spaces only, so paths and names are never split.
+func wordWrap(s string, w int) []string {
+	var out []string
+	line := ""
+	for _, word := range strings.Fields(s) {
+		switch {
+		case line == "":
+			line = word
+		case lipgloss.Width(line)+1+lipgloss.Width(word) <= w:
+			line += " " + word
+		default:
+			out = append(out, line)
+			line = word
+		}
+	}
+	return append(out, line)
 }

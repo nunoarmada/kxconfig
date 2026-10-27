@@ -40,20 +40,18 @@ func (m Model) paneNote(p pane, single bool) string {
 	return fmt.Sprintf("%d/%d tab %s", int(p)+1, int(paneCount), m.gl.cursor)
 }
 
-// withFilter pads lines to rows and appends the filter row when there is one.
+// withFilter puts the filter row directly under the pane title when there is one.
 func (m Model) withFilter(lines []string, rows int, p pane, iw int, focused bool) []string {
 	if !m.showsFilter(p) {
 		return lines
 	}
-	for len(lines) < rows {
-		lines = append(lines, "")
-	}
 	prefix := m.sty.accent.Render("/") + " "
+	row := prefix + safetext.Clean(m.activeFilterOf(p))
 	if m.filtering && focused {
 		m.finput.SetWidth(max(1, iw-4))
-		return append(lines, prefix+m.finput.View())
+		row = prefix + m.finput.View()
 	}
-	return append(lines, prefix+safetext.Clean(m.activeFilterOf(p)))
+	return append([]string{row}, lines...)
 }
 
 func (m Model) activeFilterOf(p pane) string {
@@ -75,7 +73,11 @@ func (m Model) projectRow(p store.Project, selected, focused bool, iw int) strin
 	}
 	marker := cell{s: " "}
 	nameSt := m.sty.plain
-	if p.Active {
+	switch {
+	case m.env.InShell && p.Name == m.env.Project:
+		marker = cell{s: m.gl.shellMark, st: m.sty.warn.Bold(true)}
+		nameSt = m.sty.bold
+	case p.Active:
 		marker = cell{s: m.gl.active, st: m.sty.active}
 		nameSt = m.sty.bold
 	}

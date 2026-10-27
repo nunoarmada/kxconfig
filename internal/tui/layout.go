@@ -124,6 +124,8 @@ func (m Model) bannerText() (text string, warn bool) {
 	case m.link == store.LinkForeignSymlink:
 		return m.gl.warn + " " + cfg + " is a link kx doesn't manage (" + m.gl.arrow + " " + m.linkTarget +
 			"). kx will not change it.", true
+	case m.link == store.LinkForeignFile && len(m.projects) == 0:
+		return "", false // the empty state already offers "a adopt"
 	case m.link == store.LinkForeignFile:
 		return m.gl.info + " " + cfg + " is not managed by kx yet. Using a project backs it up first.", false
 	}

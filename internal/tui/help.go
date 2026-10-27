@@ -21,7 +21,7 @@ type helpGroup struct {
 func (m *Model) helpGroups() []helpGroup {
 	return []helpGroup{
 		{name: "NAVIGATION", entries: []helpEntry{
-			{"tab / shift+tab", "next / prev pane"}, {"h l " + m.gl.arrows, "pane left / right"},
+			{"tab / shift+tab", "next / prev pane"}, {m.leftRightKeys(), "pane left / right"},
 			{"j k " + m.gl.upDown, "move"}, {"g G", "top / bottom"},
 			{"/", "filter list"}, {"esc", "back / clear / quit"},
 			{":", "command palette"}, {"ctrl+r", "reload from disk"},
@@ -42,8 +42,20 @@ func (m *Model) helpGroups() []helpGroup {
 	}
 }
 
+// leftRightKeys is the key label for pane left / right; the ASCII set drops
+// the arrow words, which only repeat the h l pair.
+func (m *Model) leftRightKeys() string {
+	if m.gl.ascii {
+		return "h l"
+	}
+	return "h l " + m.gl.arrows
+}
+
 // helpDialog lists every key. It scrolls when the terminal is short.
-type helpDialog struct{ offset int }
+type helpDialog struct {
+	offset  int
+	scrolls bool // set by view: the text is taller than the box
+}
 
 func newHelpDialog() *helpDialog { return &helpDialog{} }
 
@@ -70,8 +82,29 @@ func (d *helpDialog) update(m *Model, msg tea.Msg) (dialog, tea.Cmd) {
 // lines renders the help text for an inner width iw. Two columns when they
 // fit, one otherwise.
 func (d *helpDialog) lines(m *Model, iw int) []string {
+	groups := m.helpGroups()
+	// One key column width for every group, so descriptions line up.
+	var lAll, rAll []helpEntry
+	for _, g := range groups {
+		for i, e := range g.entries {
+			if i%2 == 0 {
+				lAll = append(lAll, e)
+			} else {
+				rAll = append(rAll, e)
+			}
+		}
+	}
+	lk, rk := keyWidth(lAll), keyWidth(rAll)
+	lw, rw := colWidth(lAll, lk), colWidth(rAll, rk)
+	twoCols := lw+2+rw <= iw
+	var allEntries []helpEntry
+	for _, g := range groups {
+		allEntries = append(allEntries, g.entries...)
+	}
+	kw := keyWidth(allEntries)
+
 	var out []string
-	for gi, g := range m.helpGroups() {
+	for gi, g := range groups {
 		if gi > 0 {
 			out = append(out, "")
 		}
@@ -80,27 +113,16 @@ func (d *helpDialog) lines(m *Model, iw int) []string {
 			out = append(out, wrap(g.inline, iw)...)
 			continue
 		}
-		var left, right []helpEntry
-		for i, e := range g.entries {
-			if i%2 == 0 {
-				left = append(left, e)
-			} else {
-				right = append(right, e)
-			}
-		}
-		lk, rk := keyWidth(left), keyWidth(right)
-		lw, rw := colWidth(left, lk), colWidth(right, rk)
-		if lw+2+rw <= iw {
-			for i := range left {
-				row := m.fit(m.entryCell(left[i], lk, lw), lw)
-				if i < len(right) {
-					row += "  " + m.entryCell(right[i], rk, rw)
+		if twoCols {
+			for i := 0; i < len(g.entries); i += 2 {
+				row := m.fit(m.entryCell(g.entries[i], lk, lw), lw)
+				if i+1 < len(g.entries) {
+					row += "  " + m.entryCell(g.entries[i+1], rk, rw)
 				}
 				out = append(out, strings.TrimRight(row, " "))
 			}
 			continue
 		}
-		kw := keyWidth(g.entries)
 		for _, e := range g.entries {
 			out = append(out, m.entryCell(e, kw, iw))
 		}
@@ -131,8 +153,16 @@ func (m *Model) entryCell(e helpEntry, kw, w int) string {
 	return ansi.Truncate(m.sty.accent.Render(e.key)+pad+"  "+e.desc, w, m.gl.ell)
 }
 
+// wide: with one key column shared by every group, two columns need ~76 text
+// columns, more than the usual 72-wide dialog leaves.
+func (d *helpDialog) wide() bool { return true }
+
 func (d *helpDialog) view(m *Model, maxW, maxH int) string {
-	w := maxW
+	w := min(maxW, 84)
+	if m.w >= 50 {
+		w = min(m.w-4, 84)
+	}
+	maxH = max(3, maxH-2)
 	iw := dialogInner(w)
 	all := d.lines(m, iw)
 	rows := max(1, maxH-2) // top and bottom border
@@ -143,12 +173,16 @@ func (d *helpDialog) view(m *Model, maxW, maxH int) string {
 		d.offset = 0
 	}
 	title := "Keys"
-	if len(d.lines(m, iw)) > rows {
+	d.scrolls = len(d.lines(m, iw)) > rows
+	if d.scrolls {
 		title = "Keys  (j/k scroll)"
 	}
 	return m.dialogBox(title, all, w, false, 0)
 }
 
 func (d *helpDialog) hints() []hint {
+	if d.scrolls {
+		return []hint{{"j/k", "scroll"}, {"esc", "close"}}
+	}
 	return []hint{{"esc", "close"}}
 }

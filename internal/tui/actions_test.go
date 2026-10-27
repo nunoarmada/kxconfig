@@ -135,7 +135,7 @@ func TestImportFlowWithConflictsRename(t *testing.T) {
 	before = snapshot(t, root)
 	m = keys(m, "enter")
 	v = plain(m)
-	mustContain(t, v, "3 conflicts", "⚠ 1 more conflict after your choices: resolve them too", "context", "prod-eu", "[ ? ]")
+	mustContain(t, v, "3 conflicts", "⚠ 1 dependent conflict after your choices: resolve them too", "context", "prod-eu", "[ ? ]")
 	if len(m.dialogs) != 1 {
 		t.Fatal("the conflict screen must stay open")
 	}
@@ -442,25 +442,13 @@ func TestDeleteWarnsAboutLiveShells(t *testing.T) {
 	if err := os.MkdirAll(s.ShellsDir(), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// This process counts as a live shell; a second copy of the same pid adds a project twice.
-	for _, pid := range []int{os.Getpid(), os.Getppid()} {
-		if err := os.WriteFile(s.ShellCopyPath(pid, "staging"), []byte(kubeconfig("stg", stg)), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	pid := liveChild(t)
+	if err := os.WriteFile(s.ShellCopyPath(pid, "staging"), []byte(kubeconfig("stg", stg)), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	m := open(t, root, 100, 30)
 	m = keys(m, "j", "j", "j", "D")
-	n := 0
-	if pids, _ := s.LiveShells("staging"); len(pids) > 0 {
-		n = len(pids)
-	}
-	if n == 0 {
-		t.Skip("no live pid available")
-	}
 	want := "⚠ 1 kx shell is using staging; it keeps its copy."
-	if n > 1 {
-		want = fmt.Sprintf("⚠ %d kx shells are using staging; they keep their copy.", n)
-	}
 	mustContain(t, plain(m), "Delete project staging?", want)
 }
 
@@ -532,7 +520,7 @@ func TestRestoreFromBackups(t *testing.T) {
 	m := open(t, root, 100, 30)
 	m = keys(m, "b")
 	v := plain(m)
-	mustContain(t, v, "Backups — prod (1)", "ID", "WHEN", " OP", old.ID, "3h ago", t0.Local().Format("2006-01-02 15:04"), "import")
+	mustContain(t, v, "Backups — prod (1)", "ID", "WHEN", old.ID, "3h ago", t0.Local().Format("2006-01-02 15:04"), "import")
 	mustContain(t, lastLine(v), "enter restore", "esc close")
 
 	m = keys(m, "enter")

@@ -63,7 +63,7 @@ func (a *app) importCmd(file, project, onConflict string, replace, useAfter, yes
 	}
 	if errors.Is(err, kubecfg.ErrConflicts) {
 		a.printConflicts(res.Report.Conflicts)
-		return fmt.Errorf("%s in project %s; nothing changed (choose with --on-conflict rename|overwrite|skip)", plural(len(res.Report.Conflicts), "conflict"), project)
+		return fmt.Errorf("%s in project %s; nothing changed (choose with --on-conflict rename|overwrite|skip)", plural(len(res.Report.Conflicts), "conflict"), safetext.Clean(project))
 	}
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (a *app) askProjectName(file string) (string, error) {
 	}
 	base := filepath.Base(file)
 	def := strings.TrimSuffix(base, filepath.Ext(base))
-	_, _ = fmt.Fprintf(a.Err, "Project name [%s]: ", def)
+	_, _ = fmt.Fprintf(a.Err, "Project name [%s]: ", safetext.Clean(def))
 	ans, err := a.readLine()
 	if err != nil {
 		return "", err
@@ -113,7 +113,7 @@ func (a *app) printImport(res store.ImportResult) {
 		state = "updated"
 	}
 	_, _ = fmt.Fprintf(a.Out, "Project %s %s: added %d, updated %d, renamed %d, skipped %d, dropped %d\n",
-		res.Project, state, len(r.Added), len(r.Overwritten), len(r.Renamed), len(r.Skipped), len(r.Dropped))
+		safetext.Clean(res.Project), state, len(r.Added), len(r.Overwritten), len(r.Renamed), len(r.Skipped), len(r.Dropped))
 	for _, d := range r.Dropped {
 		_, _ = fmt.Fprintf(a.Out, "  dropped %s %s: references a skipped or missing cluster/user\n", safetext.Clean(string(d.Kind)), safetext.Clean(d.Name))
 	}

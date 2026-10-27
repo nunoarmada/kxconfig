@@ -303,10 +303,37 @@ func (m Model) hints() []hint {
 	case paneDetails:
 		return []hint{{"tab", "next pane"}, {":", "commands"}, helpHint}
 	}
+	if m.env.InShell { // switching projects is refused in a shell: do not offer it
+		return []hint{
+			{"/", "filter"}, {"i", "import"}, {"r", "rename"}, {"D", "delete"},
+			{"b", "backups"}, {"e", "edit"}, {":", "commands"}, helpHint,
+		}
+	}
 	return []hint{
 		{"enter", "use"}, {"/", "filter"}, {"i", "import"}, {"r", "rename"}, {"D", "delete"},
 		{"b", "backups"}, {"s", "shell"}, {"e", "edit"}, {":", "commands"}, helpHint,
 	}
+}
+
+// hintPriority orders hints for dropping: the lowest goes first. The commit
+// key and the pinned last hint are never dropped; plain descriptive labels
+// and secondary movement keys go before real actions.
+func hintPriority(i int, h hint, n int) int {
+	switch {
+	case i == n-1, h.key == "enter", h.key == "y":
+		return 1000
+	case h.key == "R O S":
+		return 1
+	case h.key == "r o s":
+		return 2
+	case h.key == "j/k", h.key == "up/down", h.key == "↑↓":
+		return 3
+	case h.key == "":
+		return 4
+	case h.key == "esc", h.key == "n/esc":
+		return 500
+	}
+	return 100 - i // rightmost first, as before
 }
 
 // hintBar renders the hint bar on one row of width w. Items are dropped from
@@ -323,19 +350,38 @@ func (m Model) hintBar(w int) string {
 		return m.sty.accent.Render(h.key) + " " + m.sty.dim.Render(h.label), lipgloss.Width(h.key) + 1 + lipgloss.Width(h.label)
 	}
 	avail := w - 2 // one column of padding on each side
-	pinned := hs[len(hs)-1]
-	pinStr, pinW := render(pinned)
-	var parts []string
-	used := pinW
-	for _, h := range hs[:len(hs)-1] {
-		s, hw := render(h)
-		if used+2+hw > avail {
+	width := func(list []hint) int {
+		total := 0
+		for i, h := range list {
+			_, hw := render(h)
+			if i > 0 {
+				total += 2
+			}
+			total += hw
+		}
+		return total
+	}
+	prio := make([]int, len(hs))
+	for i, h := range hs {
+		prio[i] = hintPriority(i, h, len(hs))
+	}
+	for width(hs) > avail {
+		low := -1
+		for i := range hs {
+			if prio[i] < 1000 && (low < 0 || prio[i] < prio[low]) {
+				low = i
+			}
+		}
+		if low < 0 {
 			break
 		}
-		parts = append(parts, s)
-		used += 2 + hw
+		hs = append(hs[:low:low], hs[low+1:]...)
+		prio = append(prio[:low:low], prio[low+1:]...)
 	}
-	parts = append(parts, pinStr)
+	parts := make([]string, len(hs))
+	for i, h := range hs {
+		parts[i], _ = render(h)
+	}
 	line := " " + strings.Join(parts, "  ")
 	return ansi.Truncate(line, w, "")
 }

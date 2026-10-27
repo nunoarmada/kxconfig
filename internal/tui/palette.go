@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -150,6 +151,9 @@ func (d *paletteDialog) view(m *Model, maxW, _ int) string {
 		}
 		cells = append(cells, cell{padRight("", 9-len([]rune(c.name))) + c.desc, m.sty.dim})
 		lines = append(lines, m.row(iw, mode, cells...))
+	}
+	if hidden := len(ms) - paletteRows; hidden > 0 {
+		lines = append(lines, m.sty.dim.Render("  +"+strconv.Itoa(hidden)+" more"))
 	}
 	return m.dialogBox("Commands", lines, w, false, 1)
 }

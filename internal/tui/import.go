@@ -131,6 +131,8 @@ func (d *pathDialog) next(m *Model) dialog {
 		d.err = "No such file"
 	case fi.IsDir():
 		d.err = "That is a folder, not a kubeconfig file"
+	case !fi.Mode().IsRegular():
+		d.err = "Not a regular file"
 	default:
 		if _, err := kubecfg.LoadFlattened(path); err != nil {
 			d.err = "Not a usable kubeconfig: " + firstLine(err.Error())
@@ -273,12 +275,13 @@ type conflictDialog struct {
 	pol                  map[kubecfg.EntityRef]kubecfg.ConflictPolicy
 	cursor, offset       int
 	added                int // entities that are new in the project; -1 when unknown
+	base                 int // the first base rows come from the preview; the rest are derived
 }
 
 func newConflictDialog(m *Model, file, typed, project string, cs []kubecfg.Conflict) *conflictDialog {
 	d := &conflictDialog{
 		file: file, shown: typed, project: project, cs: cs,
-		pol: map[kubecfg.EntityRef]kubecfg.ConflictPolicy{}, added: -1,
+		pol: map[kubecfg.EntityRef]kubecfg.ConflictPolicy{}, added: -1, base: len(cs),
 	}
 	// Count the entities that are new in the project, for the footer. Any
 	// policy that resolves conflicts gives the same Added list.
@@ -331,6 +334,13 @@ func (d *conflictDialog) update(m *Model, msg tea.Msg) (dialog, tea.Cmd) {
 			d.pol[c.Ref] = set[key]
 		}
 	case "enter":
+		if n := d.unresolvedBase(); n > 0 {
+			return d, m.say(statusWarn, plural(n, "conflict")+" unresolved")
+		}
+		// Choices on earlier rows decide which derived rows still apply.
+		if cmd := d.syncDerived(m); cmd != nil {
+			return d, cmd
+		}
 		if n := d.unresolved(); n > 0 {
 			return d, m.say(statusWarn, plural(n, "conflict")+" unresolved")
 		}
@@ -350,6 +360,71 @@ func (d *conflictDialog) update(m *Model, msg tea.Msg) (dialog, tea.Cmd) {
 	}
 	d.cursor = max(0, min(d.cursor, len(d.cs)-1))
 	return d, nil
+}
+
+func (d *conflictDialog) unresolvedBase() int {
+	n := 0
+	for _, c := range d.cs[:d.base] {
+		if d.pol[c.Ref] == "" {
+			n++
+		}
+	}
+	return n
+}
+
+// syncDerived recomputes the derived rows from the choices on the base rows:
+// rows that no longer conflict are dropped, new ones are added unresolved. It
+// returns the status command when new rows appeared (the user must look), and
+// nil otherwise.
+func (d *conflictDialog) syncDerived(m *Model) tea.Cmd {
+	incoming, err1 := kubecfg.LoadFlattened(d.file)
+	master, err2 := kubecfg.LoadFlattened(m.store.ProjectPath(d.project))
+	if err1 != nil || err2 != nil {
+		return nil // Import reports the real error on apply
+	}
+	per := map[kubecfg.EntityRef]kubecfg.ConflictPolicy{}
+	for _, c := range d.cs[:d.base] {
+		per[c.Ref] = d.pol[c.Ref]
+	}
+	_, rep, err := kubecfg.Merge(master, incoming, kubecfg.MergeOptions{Default: kubecfg.PolicyFail, PerItem: per})
+	if err == nil || !errors.Is(err, kubecfg.ErrConflicts) {
+		d.dropDerived(nil)
+		return nil
+	}
+	old := map[kubecfg.EntityRef]bool{}
+	for _, c := range d.cs[d.base:] {
+		old[c.Ref] = true
+	}
+	var derived []kubecfg.Conflict
+	added := 0
+	for _, c := range rep.Conflicts {
+		derived = append(derived, c)
+		if !old[c.Ref] {
+			added++
+		}
+	}
+	d.dropDerived(derived)
+	if added == 0 {
+		return nil // only rows that went away: nothing new to look at
+	}
+	d.cursor = d.base
+	return m.say(statusWarn, plural(added, "dependent conflict")+" after your choices: resolve them too")
+}
+
+// dropDerived replaces the derived rows by cs, forgetting policies of rows
+// that went away.
+func (d *conflictDialog) dropDerived(cs []kubecfg.Conflict) {
+	keep := map[kubecfg.EntityRef]bool{}
+	for _, c := range cs {
+		keep[c.Ref] = true
+	}
+	for _, c := range d.cs[d.base:] {
+		if !keep[c.Ref] {
+			delete(d.pol, c.Ref)
+		}
+	}
+	d.cs = append(d.cs[:d.base:d.base], cs...)
+	d.cursor = max(0, min(d.cursor, len(d.cs)-1))
 }
 
 // addDerived appends conflicts that only appeared after the user's choices.

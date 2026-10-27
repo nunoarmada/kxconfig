@@ -81,6 +81,8 @@ func (d *doctorDialog) view(m *Model, maxW, maxH int) string {
 		for n, l := range msg {
 			if n == 0 {
 				l = m.sty.warn.Render(m.gl.warn) + l[len(m.gl.warn):]
+			} else {
+				l = "  " + l // hanging indent under the glyph
 			}
 			if n == len(msg)-1 {
 				l += suffix

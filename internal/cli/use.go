@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nunoarmada/kxconfig/internal/safetext"
 	"github.com/nunoarmada/kxconfig/internal/store"
 )
 
@@ -59,7 +60,7 @@ func (a *app) useCmd(name, adopt string, adoptReplace bool) error {
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(a.Out, "Switched to project %s\n", name)
+	_, _ = fmt.Fprintf(a.Out, "Switched to project %s\n", safetext.Clean(name))
 	return nil
 }
 

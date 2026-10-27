@@ -269,15 +269,25 @@ func (m *Model) startEdit() tea.Cmd {
 	if !ok {
 		return m.noProject()
 	}
-	argv := strings.Fields(os.Getenv("EDITOR"))
-	if len(argv) == 0 {
-		argv = []string{"vi"}
+	if m.env.InShell {
+		return m.say(statusWarn, "Exit this kx shell to edit projects")
 	}
 	name := p.Name
-	cmd := exec.Command(argv[0], append(argv[1:], p.Path)...)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+	return tea.ExecProcess(editCommand(p.Path), func(err error) tea.Msg {
 		return editDoneMsg{project: name, err: runError(err)}
 	})
+}
+
+// editCommand runs $EDITOR (fallback vi) on path through sh, so an editor
+// with arguments ("code -w") works and the path is never split.
+func editCommand(path string) *exec.Cmd {
+	ed := strings.TrimSpace(os.Getenv("EDITOR"))
+	if ed == "" {
+		ed = "vi"
+	}
+	cmd := exec.Command("sh", "-c", `exec $EDITOR "$1"`, "sh", path)
+	cmd.Env = append(os.Environ(), "EDITOR="+ed)
+	return cmd
 }
 
 func (m *Model) editDone(msg editDoneMsg) tea.Cmd {
@@ -329,6 +339,7 @@ func (m *Model) startNamespace() tea.Cmd {
 			return m.say(statusSuccess, "Set namespace of "+cur.Name+" to "+ns)
 		})
 	d.allowEmpty = true
+	d.help = "Leave empty to clear"
 	if sel, ok := m.selectedContext(); ok && sel.Name != cur.Name {
 		d.note = func(*Model, string) (string, bool) {
 			return "Applies to the current context, not " + safetext.Clean(sel.Name) + ".", false

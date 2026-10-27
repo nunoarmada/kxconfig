@@ -3,6 +3,9 @@ package tui
 import (
 	"fmt"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/nunoarmada/kxconfig/internal/safetext"
 )
 
@@ -40,12 +43,31 @@ func (m Model) detailLines(iw int) []string {
 	kv := func(k, v string) string {
 		return dim.Render(fmt.Sprintf("%-9s ", k)) + v
 	}
+	// Long values lose their middle: the host start and the tail both matter.
+	long := func(k, v string) string { return kv(k, midTruncate(v, iw-10, m.gl.ell)) }
 	return []string{
 		kv("context", safetext.Clean(c.Name)),
 		kv("cluster", dash(safetext.Clean(c.Cluster))),
-		kv("server", dash(safetext.Clean(c.Server))),
-		kv("user", dash(safetext.Clean(c.User))),
+		long("server", dash(safetext.Clean(c.Server))),
+		long("user", dash(safetext.Clean(c.User))),
 		kv("auth", dash(safetext.Clean(c.AuthKind))),
 		kv("file", safetext.Clean(m.tilde(m.cur.path))),
 	}
+}
+
+// midTruncate shortens s to w columns by replacing its middle with the
+// ellipsis, keeping more of the tail (the part that tells values apart).
+func midTruncate(s string, w int, ell string) string {
+	sw := lipgloss.Width(s)
+	if w <= 0 || sw <= w {
+		return s
+	}
+	ew := lipgloss.Width(ell)
+	if w <= ew+2 {
+		return ansi.Truncate(s, w, ell)
+	}
+	keep := w - ew
+	head := keep / 3
+	tail := keep - head
+	return ansi.Truncate(s, head, "") + ell + ansi.TruncateLeft(s, sw-tail, "")
 }
