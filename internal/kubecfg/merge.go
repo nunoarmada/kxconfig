@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -73,7 +74,13 @@ type MergeReport struct {
 	// reference a cluster/user that was skipped or is not defined in the
 	// incoming config; adding them would bind them to the master's entity of
 	// the same name.
-	Dropped   []EntityRef
+	Dropped []EntityRef
+	// Rebound lists existing master contexts that reference a cluster or user
+	// that was overwritten and were not themselves replaced by an incoming
+	// context: they now use the incoming cluster/user (and so send their
+	// credentials to the incoming server, or the incoming credentials to
+	// their server).
+	Rebound   []EntityRef
 	Renamed   map[EntityRef]string
 	Conflicts []Conflict
 }
@@ -83,13 +90,14 @@ type MergeReport struct {
 var ErrConflicts = errors.New("conflicting entries")
 
 // DetectConflicts lists same-name entities whose content differs between
-// master and incoming (ordered by kind, then name).
+// master and incoming (ordered by kind, then name). Master may be raw (file
+// references kept) and incoming is expected to be flattened: see Merge.
 func DetectConflicts(master, incoming *api.Config) []Conflict {
 	master, incoming = orEmpty(master), orEmpty(incoming)
 	var out []Conflict
 	for _, k := range kindOrder {
 		for _, name := range names(incoming, k) {
-			m, ok := entity(master, k, name)
+			m, ok := flatEntity(master, k, name)
 			if !ok {
 				continue
 			}
@@ -103,7 +111,10 @@ func DetectConflicts(master, incoming *api.Config) []Conflict {
 }
 
 // Merge combines incoming into a copy of master and returns it. Neither input
-// is mutated and master's CurrentContext is kept. If any conflict resolves to
+// is mutated and master's CurrentContext is kept. Master may be loaded raw
+// (relative file references intact): its entries are copied as they are and
+// only compared in flattened form, so untouched entries keep their paths.
+// Incoming is expected to be flattened. If any conflict resolves to
 // PolicyFail it returns a nil config, the report (with Conflicts) and
 // ErrConflicts.
 func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeReport, error) {
@@ -146,7 +157,7 @@ func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeR
 				}
 				rewriteContext(ctx, rep.Renamed)
 			}
-			cur, exists := entity(master, k, name)
+			cur, exists := flatEntity(master, k, name)
 			switch {
 			case !exists:
 				put(result, k, name, inc)
@@ -175,7 +186,28 @@ func Merge(master, incoming *api.Config, opts MergeOptions) (*api.Config, MergeR
 	if len(rep.Conflicts) > 0 {
 		return nil, rep, ErrConflicts
 	}
+	rep.Rebound = rebound(master, rep.Overwritten)
 	return result, rep, nil
+}
+
+// rebound lists the master contexts that reference an overwritten cluster or
+// user and are not themselves overwritten, sorted by name.
+func rebound(master *api.Config, overwritten []EntityRef) []EntityRef {
+	over := map[EntityRef]bool{}
+	for _, r := range overwritten {
+		over[r] = true
+	}
+	var out []EntityRef
+	for _, name := range names(master, KindContext) {
+		ctx := master.Contexts[name]
+		if ctx == nil || over[EntityRef{KindContext, name}] {
+			continue
+		}
+		if over[EntityRef{KindCluster, ctx.Cluster}] || over[EntityRef{KindUser, ctx.AuthInfo}] {
+			out = append(out, EntityRef{KindContext, name})
+		}
+	}
+	return out
 }
 
 // Summarize returns a safe one-line description of an entity: the server URL
@@ -189,7 +221,7 @@ func Summarize(ref EntityRef, cfg *api.Config) string {
 	}
 	switch v := e.(type) {
 	case *api.Cluster:
-		return redactServer(v.Server)
+		return RedactServer(v.Server)
 	case *api.AuthInfo:
 		return authKinds(v)
 	case *api.Context:
@@ -252,9 +284,9 @@ func authKinds(u *api.AuthInfo) string {
 	return strings.Join(kinds, ", ")
 }
 
-// redactServer keeps only scheme://host[:port]/path, dropping userinfo, query,
+// RedactServer keeps only scheme://host[:port]/path, dropping userinfo, query,
 // fragment and opaque parts.
-func redactServer(server string) string {
+func RedactServer(server string) string {
 	u, err := url.Parse(server)
 	if err != nil || u.Scheme == "" || u.Host == "" || u.Opaque != "" {
 		return "(unparseable server)"
@@ -360,6 +392,38 @@ func entity(c *api.Config, k Kind, name string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+// flatEntity is entity with file references resolved and inlined, so a raw
+// entity compares equal to its flattened twin. An entity that cannot be
+// flattened (no origin, or a file that is missing) is returned raw.
+func flatEntity(c *api.Config, k Kind, name string) (any, bool) {
+	raw, ok := entity(c, k, name)
+	if !ok || k == KindContext {
+		return raw, ok
+	}
+	tmp := api.NewConfig()
+	switch k {
+	case KindCluster:
+		if c.Clusters[name].LocationOfOrigin == "" {
+			return raw, true
+		}
+		tmp.Clusters[name] = c.Clusters[name].DeepCopy()
+	case KindUser:
+		if c.AuthInfos[name].LocationOfOrigin == "" {
+			return raw, true
+		}
+		tmp.AuthInfos[name] = c.AuthInfos[name].DeepCopy()
+	}
+	if clientcmd.ResolveLocalPaths(tmp) != nil || api.FlattenConfig(tmp) != nil {
+		return raw, true
+	}
+	if k == KindCluster {
+		tmp.Clusters[name].LocationOfOrigin = ""
+		return tmp.Clusters[name], true
+	}
+	tmp.AuthInfos[name].LocationOfOrigin = ""
+	return tmp.AuthInfos[name], true
 }
 
 func put(c *api.Config, k Kind, name string, e any) {

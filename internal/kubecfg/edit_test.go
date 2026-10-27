@@ -194,3 +194,16 @@ func TestAuthKind(t *testing.T) {
 		}
 	}
 }
+
+func TestContextsRedactsServer(t *testing.T) {
+	cfg := editCfg()
+	cfg.Clusters["ca"].Server = "https://u:p@h:6443/x?token=t#f"
+	for _, ci := range Contexts(cfg) {
+		if ci.Name == "a" && ci.Server != "https://h:6443/x" {
+			t.Fatalf("Server = %q, want redacted", ci.Server)
+		}
+	}
+	if got := RedactServer("https://u:p@h:6443/x?token=t#f"); got != "https://h:6443/x" {
+		t.Fatalf("RedactServer = %q", got)
+	}
+}

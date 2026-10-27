@@ -2,6 +2,7 @@ package kubecfg
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -453,5 +454,136 @@ func TestConflictSummariesDifferForSameAuthKind(t *testing.T) {
 		if strings.Contains(s, "old-token") || strings.Contains(s, "new-token") {
 			t.Errorf("leak: %q", s)
 		}
+	}
+}
+
+func TestMergeOverwriteReportsReboundContexts(t *testing.T) {
+	master := mk("")
+	addCluster(master, "shared", "https://old")
+	addUser(master, "u1", "t1")
+	addUser(master, "u2", "t2")
+	addCtx(master, "z-keep", "shared", "u1", "")
+	addCtx(master, "a-keep", "shared", "u1", "")
+	addCtx(master, "replaced", "shared", "u1", "")
+	addCtx(master, "other", "other-cluster", "u2", "")
+	incoming := mk("")
+	addCluster(incoming, "shared", "https://evil")
+	addUser(incoming, "u1", "stolen")
+	addUser(incoming, "u2", "t2")
+	addCtx(incoming, "replaced", "shared", "u1", "x")
+
+	got, rep, err := Merge(master, incoming, MergeOptions{Default: PolicyOverwrite})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Sorted; "replaced" is replaced by the incoming context so it is not
+	// listed; "other" references nothing that was overwritten.
+	want := []EntityRef{ref(KindContext, "a-keep"), ref(KindContext, "z-keep")}
+	if !reflect.DeepEqual(rep.Rebound, want) {
+		t.Errorf("Rebound = %v, want %v", rep.Rebound, want)
+	}
+	if got.Clusters["shared"].Server != "https://evil" {
+		t.Error("overwrite did not apply")
+	}
+}
+
+func TestMergeNoReboundWithoutOverwrite(t *testing.T) {
+	master, incoming := conflictPair()
+	for _, p := range []ConflictPolicy{PolicySkip, PolicyRename} {
+		_, rep, err := Merge(master, incoming, MergeOptions{Default: p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rep.Rebound) != 0 {
+			t.Errorf("%s: Rebound = %v, want none", p, rep.Rebound)
+		}
+	}
+}
+
+func TestMergeRenameWithDanglingContext(t *testing.T) {
+	master := mk("")
+	addCluster(master, "c", "https://old")
+	addUser(master, "u", "t")
+	incoming := mk("")
+	addCluster(incoming, "c", "https://new")
+	addUser(incoming, "u", "t")
+	addCtx(incoming, "good", "c", "u", "")
+	addCtx(incoming, "dangling", "c", "ghost", "")
+	got, rep, err := Merge(master, incoming, MergeOptions{Default: PolicyRename})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Renamed[ref(KindCluster, "c")] != "c-2" {
+		t.Errorf("Renamed = %v", rep.Renamed)
+	}
+	if got.Contexts["good"] == nil || got.Contexts["good"].Cluster != "c-2" {
+		t.Errorf("good context = %+v", got.Contexts["good"])
+	}
+	if got.Contexts["dangling"] != nil {
+		t.Error("dangling context was merged")
+	}
+	if !reflect.DeepEqual(rep.Dropped, []EntityRef{ref(KindContext, "dangling")}) {
+		t.Errorf("Dropped = %v", rep.Dropped)
+	}
+}
+
+func writeKC(t *testing.T, dir, ca string) string {
+	t.Helper()
+	path := filepath.Join(dir, "config")
+	yaml := "apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://c\n    certificate-authority: " + ca + "\n"
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestMergeRawMasterKeepsFileReferences(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ca.crt"), []byte("CA"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := writeKC(t, dir, "ca.crt")
+	master, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	incoming, err := LoadFlattened(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, rep, err := Merge(master, incoming, MergeOptions{})
+	if err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if !reflect.DeepEqual(rep.Unchanged, []EntityRef{ref(KindCluster, "c")}) {
+		t.Errorf("Unchanged = %v, want the cluster (flattened comparison)", rep.Unchanged)
+	}
+	if got.Clusters["c"].CertificateAuthority != "ca.crt" || len(got.Clusters["c"].CertificateAuthorityData) != 0 {
+		t.Errorf("master entry was rewritten: %+v", got.Clusters["c"])
+	}
+}
+
+func TestMergeMasterWithDanglingFileReference(t *testing.T) {
+	master, err := Load(writeKC(t, t.TempDir(), "missing.crt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	incoming := mk("")
+	addCluster(incoming, "n", "https://n")
+	got, rep, err := Merge(master, incoming, MergeOptions{})
+	if err != nil {
+		t.Fatalf("Merge with dangling master reference: %v", err)
+	}
+	if got.Clusters["c"].CertificateAuthority != "missing.crt" || got.Clusters["n"] == nil {
+		t.Errorf("unexpected result %+v", got.Clusters)
+	}
+	if len(rep.Added) != 1 {
+		t.Errorf("Added = %v", rep.Added)
+	}
+	// A same-name entity that cannot be flattened is compared raw: it differs.
+	incoming = mk("")
+	addCluster(incoming, "c", "https://c")
+	if cs := DetectConflicts(master, incoming); len(cs) != 1 {
+		t.Errorf("DetectConflicts = %v, want 1 conflict", cs)
 	}
 }

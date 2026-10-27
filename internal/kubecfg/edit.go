@@ -91,8 +91,9 @@ type ContextInfo struct {
 	Current                                          bool
 }
 
-// Contexts lists all contexts sorted by name. References to missing
-// clusters or users yield an empty Server and AuthKind "none".
+// Contexts lists all contexts sorted by name. Server is redacted (see
+// RedactServer). References to missing clusters or users yield an empty
+// Server and AuthKind "none".
 func Contexts(cfg *api.Config) []ContextInfo {
 	out := make([]ContextInfo, 0, len(cfg.Contexts))
 	for _, name := range names(cfg, KindContext) {
@@ -108,8 +109,8 @@ func Contexts(cfg *api.Config) []ContextInfo {
 			AuthKind:  AuthKind(cfg.AuthInfos[c.AuthInfo]),
 			Current:   name == cfg.CurrentContext,
 		}
-		if cl := cfg.Clusters[c.Cluster]; cl != nil {
-			ci.Server = cl.Server
+		if cl := cfg.Clusters[c.Cluster]; cl != nil && cl.Server != "" {
+			ci.Server = RedactServer(cl.Server)
 		}
 		out = append(out, ci)
 	}
