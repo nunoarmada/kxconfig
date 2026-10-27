@@ -26,8 +26,8 @@ func status(p store.Project) string {
 	switch {
 	case p.Err != nil:
 		return "invalid"
-	case fsutil.TooOpen(p.Mode):
-		return fmt.Sprintf("perms %04o", p.Mode)
+	case fsutil.TooOpen(p.Mode.Perm()):
+		return fmt.Sprintf("perms %04o", p.Mode.Perm())
 	}
 	return "ok"
 }

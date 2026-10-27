@@ -3,6 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"text/tabwriter"
 	"time"
 
@@ -36,7 +38,12 @@ func (a *app) newDelete() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			name := args[0]
-			if active, st, err := a.Store.Active(); err == nil && st == store.LinkOK && active == name && !force {
+			if err := a.requireProject(name); err != nil {
+				return err
+			}
+			active, st, aerr := a.Store.Active()
+			wasActive := aerr == nil && st == store.LinkOK && active == name
+			if wasActive && !force {
 				return fmt.Errorf("project %s is active; use --force to delete it and deactivate", name)
 			}
 			if !yes {
@@ -52,6 +59,9 @@ func (a *app) newDelete() *cobra.Command {
 				return err
 			}
 			_, _ = fmt.Fprintf(a.Out, "Deleted project %s (backup kept; see 'kx backups %s')\n", name, name)
+			if wasActive {
+				_, _ = fmt.Fprintf(a.Out, "The config link was removed, so no project is active; run 'kx use <project>'.\n")
+			}
 			return nil
 		},
 		ValidArgsFunction: a.projectArgs,
@@ -89,8 +99,23 @@ func (a *app) newBackups() *cobra.Command {
 	}
 }
 
+// requireProject fails with ErrNotFound unless the project's file exists.
+func (a *app) requireProject(name string) error {
+	if err := store.ValidateName(name); err != nil {
+		return err
+	}
+	if _, err := os.Stat(a.Store.ProjectPath(name)); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("%w: %s", store.ErrNotFound, name)
+		}
+		return err
+	}
+	return nil
+}
+
 func (a *app) newRestore() *cobra.Command {
-	return &cobra.Command{
+	var yes bool
+	cmd := &cobra.Command{
 		Use:   "restore PROJECT [ID]",
 		Short: "Restore a project from a backup (default: the latest)",
 		Args:  cobra.RangeArgs(1, 2),
@@ -111,6 +136,11 @@ func (a *app) newRestore() *cobra.Command {
 					return fmt.Errorf("no backups for project %s", name)
 				}
 				id = bs[0].ID
+			}
+			if !yes {
+				if err := a.confirm(fmt.Sprintf("Restore project %s from backup %s (the current file is backed up first)?", name, id)); err != nil {
+					return err
+				}
 			}
 			a.warnLiveShells(name)
 			if err := a.Store.Restore(name, id); err != nil {
@@ -137,4 +167,6 @@ func (a *app) newRestore() *cobra.Command {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		},
 	}
+	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask for confirmation")
+	return cmd
 }

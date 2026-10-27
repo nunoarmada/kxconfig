@@ -3,6 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -68,7 +70,7 @@ func (a *app) resolveForeign(adopt string, adoptReplace bool) error {
 	case adopt != "":
 		return a.Store.AdoptForeign(adopt)
 	case adoptReplace:
-		return a.Store.AdoptForeign("")
+		return a.replaceForeign()
 	case !a.IsTTY:
 		return fmt.Errorf("%s is a regular file that is not a kx project; rerun with --adopt=<name> to keep it as a project, or --adopt-replace to replace it (a backup is kept)", a.Store.ConfigPath())
 	}
@@ -79,14 +81,43 @@ func (a *app) resolveForeign(adopt string, adoptReplace bool) error {
 	}
 	switch strings.ToLower(ans) {
 	case "i", "import":
-		_, _ = fmt.Fprint(a.Err, "Project name: ")
+		def := a.freeName("old")
+		_, _ = fmt.Fprintf(a.Err, "Project name [%s]: ", def)
 		name, err := a.readLine()
 		if err != nil {
 			return err
 		}
+		if name == "" {
+			name = def
+		}
 		return a.Store.AdoptForeign(name)
 	case "r", "replace":
-		return a.Store.AdoptForeign("")
+		return a.replaceForeign()
 	}
 	return errors.New("aborted")
+}
+
+// replaceForeign backs up and removes the foreign config, and says where the
+// backup went.
+func (a *app) replaceForeign() error {
+	if err := a.Store.AdoptForeign(""); err != nil {
+		return err
+	}
+	where := filepath.Join(a.Store.Backups.Dir, "_initial")
+	if bs, err := a.Store.Backups.List("_initial"); err == nil && len(bs) > 0 {
+		where = bs[0].Path
+	}
+	_, _ = fmt.Fprintf(a.Out, "Replaced %s; the previous file is backed up at %s\n", a.Store.ConfigPath(), where)
+	return nil
+}
+
+// freeName returns base, or base-2, base-3... for the first unused project name.
+func (a *app) freeName(base string) string {
+	name := base
+	for i := 2; ; i++ {
+		if _, err := os.Lstat(a.Store.ProjectPath(name)); err != nil {
+			return name
+		}
+		name = fmt.Sprintf("%s-%d", base, i)
+	}
 }

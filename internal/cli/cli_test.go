@@ -533,7 +533,7 @@ func TestRestoreLatest(t *testing.T) {
 	if !strings.Contains(out, "ID") || !strings.Contains(out, "import") {
 		t.Fatalf("backups output:\n%s", out)
 	}
-	h.mustRun("restore", "a")
+	h.mustRun("restore", "a", "--yes")
 	cfg, _ = kubecfg.Load(h.d.Store.ProjectPath("a"))
 	if len(cfg.Contexts) != 1 || cfg.Contexts["x1"] == nil {
 		t.Fatalf("restore did not bring back the original: %v", cfg.Contexts)
@@ -543,7 +543,7 @@ func TestRestoreLatest(t *testing.T) {
 func TestRestoreWithoutBackups(t *testing.T) {
 	h := newHarness(t)
 	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://a", "u", "x")), "-p", "a")
-	code, _, errOut := h.run("restore", "a")
+	code, _, errOut := h.run("restore", "a", "--yes")
 	if code != 1 || !strings.Contains(errOut, "no backups") {
 		t.Fatalf("code=%d stderr=%q", code, errOut)
 	}
@@ -634,5 +634,136 @@ func TestCompletionScript(t *testing.T) {
 		if out := h.mustRun("completion", sh); !strings.Contains(out, "kx") {
 			t.Fatalf("%s completion empty", sh)
 		}
+	}
+}
+
+func twoVersions(t *testing.T) (*harness, []byte) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c1", "https://a", "u1", "x1")), "-p", "a")
+	h.mustRun("import", h.write("b.yaml", kcYAML("c2", "https://b", "u2", "x2")), "-p", "a")
+	cur, _ := os.ReadFile(h.d.Store.ProjectPath("a"))
+	return h, cur
+}
+
+func TestRestoreNeedsYesWithoutTTY(t *testing.T) {
+	h, cur := twoVersions(t)
+	code, _, errOut := h.run("restore", "a")
+	if code != 1 || !strings.Contains(errOut, "--yes") {
+		t.Fatalf("code=%d stderr=%q", code, errOut)
+	}
+	after, _ := os.ReadFile(h.d.Store.ProjectPath("a"))
+	if !bytes.Equal(cur, after) {
+		t.Fatal("restore changed the file without confirmation")
+	}
+}
+
+func TestRestoreExplicitID(t *testing.T) {
+	h, _ := twoVersions(t)
+	bs, _ := h.d.Store.Backups.List("a")
+	h.mustRun("restore", "a", bs[0].ID, "--yes")
+	cfg, _ := kubecfg.Load(h.d.Store.ProjectPath("a"))
+	if len(cfg.Contexts) != 1 {
+		t.Fatalf("contexts = %d", len(cfg.Contexts))
+	}
+}
+
+func TestRestoreTTYAbort(t *testing.T) {
+	h, cur := twoVersions(t)
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("n\n")
+	code, _, _ := h.run("restore", "a")
+	after, _ := os.ReadFile(h.d.Store.ProjectPath("a"))
+	if code != 1 || !bytes.Equal(cur, after) {
+		t.Fatal("n must abort and change nothing")
+	}
+}
+
+func TestAdoptReplaceSaysWhereBackupWent(t *testing.T) {
+	h := foreignSetup(t)
+	out := h.mustRun("use", "a", "--adopt-replace")
+	if !strings.Contains(out, "_initial") {
+		t.Fatalf("backup location not shown:\n%s", out)
+	}
+}
+
+func TestAdoptInteractiveEmptyNameUsesDefault(t *testing.T) {
+	h := foreignSetup(t)
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("i\n\n")
+	h.mustRun("use", "a")
+	if _, err := os.Stat(h.d.Store.ProjectPath("old")); err != nil {
+		t.Fatalf("default name not used: %v", err)
+	}
+	if !strings.Contains(h.err.String(), "Project name [old]:") {
+		t.Fatalf("prompt: %q", h.err.String())
+	}
+}
+
+func TestAdoptInteractiveDefaultSkipsTaken(t *testing.T) {
+	h := foreignSetup(t)
+	h.mustRun("import", h.write("o.yaml", kcYAML("c", "https://o", "u", "x")), "-p", "old")
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("i\n\n")
+	h.mustRun("use", "a")
+	if _, err := os.Stat(h.d.Store.ProjectPath("old-2")); err != nil {
+		t.Fatalf("old-2 not used: %v", err)
+	}
+}
+
+func TestImportReplaceNeedsYesWithoutTTY(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c1", "https://a", "u1", "x1")), "-p", "a")
+	f := h.write("b.yaml", kcYAML("c2", "https://b", "u2", "x2"))
+	code, _, errOut := h.run("import", f, "-p", "a", "--replace")
+	if code != 1 || !strings.Contains(errOut, "--yes") {
+		t.Fatalf("code=%d stderr=%q", code, errOut)
+	}
+	cfg, _ := kubecfg.Load(h.d.Store.ProjectPath("a"))
+	if cfg.Contexts["x1"] == nil {
+		t.Fatal("replace ran without confirmation")
+	}
+	h.mustRun("import", f, "-p", "a", "--replace", "--yes")
+	cfg, _ = kubecfg.Load(h.d.Store.ProjectPath("a"))
+	if cfg.Contexts["x1"] != nil || cfg.Contexts["x2"] == nil {
+		t.Fatal("replace not applied")
+	}
+}
+
+func TestImportReplaceNewProjectNoConfirm(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://a", "u", "x")), "-p", "n", "--replace")
+}
+
+func TestDeleteTTYAbort(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://a", "u", "x")), "-p", "a")
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("n\n")
+	code, _, _ := h.run("delete", "a")
+	if code != 1 {
+		t.Fatalf("code = %d", code)
+	}
+	if _, err := os.Stat(h.d.Store.ProjectPath("a")); err != nil {
+		t.Fatal("project must remain")
+	}
+}
+
+func TestDeleteMissingDoesNotPrompt(t *testing.T) {
+	h := newHarness(t)
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("")
+	code, _, errOut := h.run("delete", "ghost")
+	if code != 1 || !strings.Contains(errOut, "not found") || strings.Contains(errOut, "[y/N]") {
+		t.Fatalf("code=%d stderr=%q", code, errOut)
+	}
+}
+
+func TestDeleteForceActiveSaysLinkRemoved(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://a", "u", "x")), "-p", "a")
+	h.mustRun("use", "a")
+	out := h.mustRun("delete", "a", "--force", "--yes")
+	if !strings.Contains(out, "config link was removed") || !strings.Contains(out, "kx use") {
+		t.Fatalf("out:\n%s", out)
 	}
 }
