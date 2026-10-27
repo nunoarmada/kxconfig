@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -273,6 +272,11 @@ func (m *Model) startEdit() tea.Cmd {
 		return m.say(statusWarn, "Exit this kx shell to edit projects")
 	}
 	name := p.Name
+	// The editor can break the file; keep what it holds now. A failed prune
+	// only leaves old backups behind, so the warning is dropped.
+	if _, _, err := m.store.BackupProject(name, "edit"); err != nil {
+		return m.failed("back up "+name, err)
+	}
 	return tea.ExecProcess(editCommand(p.Path), func(err error) tea.Msg {
 		return editDoneMsg{project: name, err: runError(err)}
 	})
@@ -301,8 +305,6 @@ func (m *Model) editDone(msg editDoneMsg) tea.Cmd {
 	return m.say(statusSuccess, "Edited "+msg.project)
 }
 
-var nsRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
-
 // startNamespace asks for the namespace of the current context. Enter with an
 // empty value clears it.
 func (m *Model) startNamespace() tea.Cmd {
@@ -321,7 +323,7 @@ func (m *Model) startNamespace() tea.Cmd {
 	clean := safetext.Clean(cur.Name)
 	d := newInputDialog(m, "Set namespace", "Namespace for current context "+clean, cur.Namespace,
 		func(_ *Model, v string) string {
-			if !nsRe.MatchString(v) {
+			if !kubecfg.ValidNamespace(v) {
 				return "Use lowercase letters, digits and - (max 63)"
 			}
 			return ""

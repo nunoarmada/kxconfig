@@ -818,3 +818,173 @@ func TestConfirmPromptStripsTerminalEscapes(t *testing.T) {
 		t.Fatalf("confirm prompt leaked control characters: %q", errOut)
 	}
 }
+
+// reboundSetup has project p with context x1 on cluster c, and returns the
+// path of a file whose cluster c points elsewhere (a different context x2).
+func reboundSetup(t *testing.T) (*harness, string, []byte) {
+	t.Helper()
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://one", "u1", "x1")), "-p", "p")
+	before, err := os.ReadFile(h.d.Store.ProjectPath("p"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h, h.write("b.yaml", kcYAML("c", "https://evil", "u2", "x2")), before
+}
+
+func TestImportOverwriteListsReboundAndNeedsYes(t *testing.T) {
+	h, in, before := reboundSetup(t)
+	code, out, errOut := h.run("import", in, "-p", "p", "--on-conflict", "overwrite")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 (stdout %q stderr %q)", code, out, errOut)
+	}
+	all := out + errOut
+	for _, want := range []string{"existing contexts now use the incoming cluster/user", "x1", "--yes"} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("output lacks %q:\n%s", want, all)
+		}
+	}
+	if after, _ := os.ReadFile(h.d.Store.ProjectPath("p")); !bytes.Equal(before, after) {
+		t.Fatal("nothing may be written before confirmation")
+	}
+	if n, _ := h.d.Store.Backups.List("p"); len(n) != 0 {
+		t.Fatalf("backup taken before confirmation: %v", n)
+	}
+
+	h.mustRun("import", in, "-p", "p", "--on-conflict", "overwrite", "--yes")
+	if !strings.Contains(h.out.String()+h.err.String(), "x1") {
+		t.Fatal("rebound contexts must be listed even with --yes")
+	}
+	cfg, _ := kubecfg.Load(h.d.Store.ProjectPath("p"))
+	if cfg.Clusters["c"].Server != "https://evil" {
+		t.Fatalf("overwrite not applied: %+v", cfg.Clusters["c"])
+	}
+}
+
+func TestImportOverwriteReboundTTYConfirm(t *testing.T) {
+	h, in, before := reboundSetup(t)
+	h.d.IsTTY = true
+	h.d.In = strings.NewReader("n\n")
+	if code, _, _ := h.run("import", in, "-p", "p", "--on-conflict", "overwrite"); code != 1 {
+		t.Fatalf("declined import must fail, exit = %d", code)
+	}
+	if after, _ := os.ReadFile(h.d.Store.ProjectPath("p")); !bytes.Equal(before, after) {
+		t.Fatal("declined import changed the project")
+	}
+
+	h.d.In = strings.NewReader("y\n")
+	h.mustRun("import", in, "-p", "p", "--on-conflict", "overwrite")
+	cfg, _ := kubecfg.Load(h.d.Store.ProjectPath("p"))
+	if cfg.Clusters["c"].Server != "https://evil" {
+		t.Fatal("confirmed overwrite not applied")
+	}
+}
+
+func TestImportOverwriteWithoutReboundDoesNotAsk(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://one", "u1", "x1")), "-p", "p")
+	// The incoming x1 differs too (namespace), so it is replaced rather than
+	// silently re-pointed.
+	in := h.write("b.yaml", strings.Replace(kcYAML("c", "https://two", "u1", "x1"), "user: u1\n", "user: u1\n    namespace: other\n", 1))
+	code, _, errOut := h.run("import", in, "-p", "p", "--on-conflict", "overwrite")
+	if code != 0 {
+		t.Fatalf("exit = %d: %s", code, errOut)
+	}
+}
+
+func TestNsValidatesNamespace(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcYAML("c", "https://a", "u", "x")), "-p", "a")
+	h.mustRun("use", "a")
+	for _, bad := range []string{"Bad_NS", "x-", "a b", strings.Repeat("a", 64)} {
+		if code, _, errOut := h.run("ns", bad); code != 1 || !strings.Contains(errOut, "namespace") {
+			t.Errorf("ns %q: code=%d stderr=%q", bad, code, errOut)
+		}
+	}
+	h.mustRun("ns", "kube-system")
+	cfg, _ := kubecfg.Load(h.d.Store.ProjectPath("a"))
+	if cfg.Contexts["x"].Namespace != "kube-system" {
+		t.Fatalf("namespace = %q", cfg.Contexts["x"].Namespace)
+	}
+	h.mustRun("ns", "")
+	cfg, _ = kubecfg.Load(h.d.Store.ProjectPath("a"))
+	if cfg.Contexts["x"].Namespace != "" {
+		t.Fatalf("namespace not cleared: %q", cfg.Contexts["x"].Namespace)
+	}
+}
+
+func TestRestoreInitialAsNewProject(t *testing.T) {
+	h := foreignSetup(t)
+	foreign, _ := os.ReadFile(h.d.Store.ConfigPath())
+	h.mustRun("use", "a", "--adopt-replace")
+
+	code, _, errOut := h.run("restore", "--initial")
+	if code != 1 || !strings.Contains(errOut, "--as") {
+		t.Fatalf("missing --as: code=%d stderr=%q", code, errOut)
+	}
+	if code, _, _ := h.run("restore", "--initial", "--as", "a"); code != 1 {
+		t.Fatal("restoring over an existing project must fail")
+	}
+	out := h.mustRun("backups", "--initial")
+	if !strings.Contains(out, "adopt") {
+		t.Fatalf("backups --initial:\n%s", out)
+	}
+	h.mustRun("restore", "--initial", "--as", "original")
+	got, err := os.ReadFile(h.d.Store.ProjectPath("original"))
+	if err != nil || !bytes.Equal(got, foreign) {
+		t.Fatalf("restored project = %q, %v", got, err)
+	}
+	if h.active() != "a" {
+		t.Fatal("restore --initial must not change the active project")
+	}
+}
+
+func TestCtxNsWarnOnForeignKubeconfig(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcTwoYAML()), "-p", "a")
+	h.mustRun("use", "a")
+	for _, args := range [][]string{{"ctx", "ctx2"}, {"ns", "kube-system"}, {"ctx"}} {
+		if _, _, errOut := h.run(args...); strings.Contains(errOut, "KUBECONFIG") {
+			t.Errorf("%v warned without KUBECONFIG: %q", args, errOut)
+		}
+	}
+	h.d.Env = store.Env{Kubeconfig: "/somewhere/else"}
+	for _, args := range [][]string{{"ctx", "ctx2"}, {"ns", "kube-system"}, {"ctx"}} {
+		_, _, errOut := h.run(args...)
+		if !strings.Contains(errOut, "kubectl reads $KUBECONFIG") || !strings.Contains(errOut, "/somewhere/else") {
+			t.Errorf("%v: no KUBECONFIG warning: %q", args, errOut)
+		}
+	}
+}
+
+func TestImportUseRefusedInShellBeforeImporting(t *testing.T) {
+	h := newHarness(t)
+	h.d.Env = store.Env{InShell: true, Project: "x"}
+	code, _, errOut := h.run("import", h.write("a.yaml", kcYAML("c", "https://a", "u", "x")), "-p", "a", "--use")
+	if code != 1 || !strings.Contains(errOut, "kx shell") {
+		t.Fatalf("code=%d stderr=%q", code, errOut)
+	}
+	if _, err := os.Stat(h.d.Store.ProjectPath("a")); err == nil {
+		t.Fatal("project was imported although --use was refused")
+	}
+}
+
+func TestImportThenUseAdoptsForeignConfigSilently(t *testing.T) {
+	h := newHarness(t)
+	foreign := "# hand written\n" + kcYAML("c", "https://a", "u", "x")
+	if err := os.WriteFile(h.d.Store.ConfigPath(), []byte(foreign), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.mustRun("import", h.d.Store.ConfigPath(), "-p", "a")
+	h.mustRun("use", "a") // no --adopt needed: same kubeconfig
+	if h.active() != "a" {
+		t.Fatal("a should be active")
+	}
+	bs, err := h.d.Store.Backups.List("_initial")
+	if err != nil || len(bs) != 1 {
+		t.Fatalf("want one _initial backup, got %v, %v", bs, err)
+	}
+	if got, _ := os.ReadFile(bs[0].Path); string(got) != foreign {
+		t.Fatalf("backup = %q", got)
+	}
+}

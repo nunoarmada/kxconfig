@@ -255,6 +255,10 @@ func (m *Model) finishImport(file, project string, res store.ImportResult, err e
 	}
 	text := "Imported " + name + " into " + project + ": " + strings.Join(parts, ", ")
 	kind := statusSuccess
+	if len(r.Rebound) > 0 {
+		text += "; re-pointed contexts: " + refNames(r.Rebound)
+		kind = statusWarn
+	}
 	if n := len(r.Dropped); n > 0 {
 		text += ", " + plural(n, "context") + " dropped"
 		kind = statusWarn
@@ -264,6 +268,15 @@ func (m *Model) finishImport(file, project string, res store.ImportResult, err e
 		kind = statusWarn
 	}
 	return m.say(kind, text)
+}
+
+// refNames joins the safe names of refs for display.
+func refNames(refs []kubecfg.EntityRef) string {
+	names := make([]string, len(refs))
+	for i, r := range refs {
+		names[i] = safetext.Clean(r.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // conflictDialog is the full-body screen that resolves every same-name entity
@@ -276,6 +289,12 @@ type conflictDialog struct {
 	cursor, offset       int
 	added                int // entities that are new in the project; -1 when unknown
 	base                 int // the first base rows come from the preview; the rest are derived
+
+	// Existing contexts that the current overwrite choices would re-point at
+	// the incoming cluster/user, in total and per overwritten entity.
+	rebound   []kubecfg.EntityRef
+	reboundBy map[kubecfg.EntityRef][]kubecfg.EntityRef
+	acked     string // the rebound set the user already saw and confirmed
 }
 
 func newConflictDialog(m *Model, file, typed, project string, cs []kubecfg.Conflict) *conflictDialog {
@@ -296,6 +315,45 @@ func newConflictDialog(m *Model, file, typed, project string, cs []kubecfg.Confl
 }
 
 func (d *conflictDialog) wide() bool { return true }
+
+// previewRebound recomputes which existing contexts the overwrite choices so
+// far would re-point, using the same merge preview the import applies.
+// Unresolved rows count as skipped, so the preview never fails on them.
+func (d *conflictDialog) previewRebound(m *Model) {
+	d.rebound, d.reboundBy = nil, nil
+	per := map[kubecfg.EntityRef]kubecfg.ConflictPolicy{}
+	overwrites := false
+	for _, c := range d.cs {
+		if p := d.pol[c.Ref]; p != "" {
+			per[c.Ref] = p
+			overwrites = overwrites || p == kubecfg.PolicyOverwrite
+		}
+	}
+	if !overwrites {
+		return
+	}
+	rep, err := m.store.PreviewMerge(d.file, d.project, kubecfg.MergeOptions{Default: kubecfg.PolicySkip, PerItem: per})
+	if err != nil || len(rep.Rebound) == 0 {
+		return
+	}
+	master, err := kubecfg.Load(m.store.ProjectPath(d.project))
+	if err != nil {
+		return
+	}
+	d.rebound = rep.Rebound
+	d.reboundBy = map[kubecfg.EntityRef][]kubecfg.EntityRef{}
+	for _, r := range rep.Rebound {
+		ctx := master.Contexts[r.Name]
+		if ctx == nil {
+			continue
+		}
+		for _, e := range []kubecfg.EntityRef{{Kind: kubecfg.KindCluster, Name: ctx.Cluster}, {Kind: kubecfg.KindUser, Name: ctx.AuthInfo}} {
+			if per[e] == kubecfg.PolicyOverwrite {
+				d.reboundBy[e] = append(d.reboundBy[e], r)
+			}
+		}
+	}
+}
 
 func (d *conflictDialog) unresolved() int {
 	n := 0
@@ -329,10 +387,12 @@ func (d *conflictDialog) update(m *Model, msg tea.Msg) (dialog, tea.Cmd) {
 		d.cursor = len(d.cs) - 1
 	case "r", "o", "s":
 		d.pol[d.cs[d.cursor].Ref] = set[key]
+		d.previewRebound(m)
 	case "R", "O", "S":
 		for _, c := range d.cs {
 			d.pol[c.Ref] = set[key]
 		}
+		d.previewRebound(m)
 	case "enter":
 		if n := d.unresolvedBase(); n > 0 {
 			return d, m.say(statusWarn, plural(n, "conflict")+" unresolved")
@@ -343,6 +403,13 @@ func (d *conflictDialog) update(m *Model, msg tea.Msg) (dialog, tea.Cmd) {
 		}
 		if n := d.unresolved(); n > 0 {
 			return d, m.say(statusWarn, plural(n, "conflict")+" unresolved")
+		}
+		// Overwriting can silently point existing contexts at the incoming
+		// cluster/user: show them and ask once before writing anything.
+		d.previewRebound(m)
+		if len(d.rebound) > 0 && d.acked != refNames(d.rebound) {
+			d.acked = refNames(d.rebound)
+			return d, m.say(statusWarn, "Overwrite re-points existing contexts: "+d.acked+". Press enter again to apply.")
 		}
 		per := make(map[kubecfg.EntityRef]kubecfg.ConflictPolicy, len(d.pol))
 		for ref, p := range d.pol {
@@ -483,9 +550,13 @@ func (d *conflictDialog) view(m *Model, maxW, maxH int) string {
 		summary = "Nothing new to add. " + summary
 	}
 	summaryRows := wrap(summary, iw)
+	var noteRows []string
+	if c := d.cs[d.cursor]; d.pol[c.Ref] == kubecfg.PolicyOverwrite && len(d.reboundBy[c.Ref]) > 0 {
+		noteRows = wrap("Overwriting "+string(c.Ref.Kind)+" "+safetext.Clean(c.Ref.Name)+" re-points existing contexts: "+refNames(d.reboundBy[c.Ref]), iw)
+	}
 
 	// Rows left for the list: borders, header, blank row, legend, summary.
-	rows := maxH - 2 - 1 - 1 - len(legend) - len(summaryRows)
+	rows := maxH - 2 - 1 - 1 - len(legend) - len(summaryRows) - len(noteRows)
 	if narrow {
 		rows -= 3 // existing / incoming of the cursor row
 	}
@@ -549,6 +620,9 @@ func (d *conflictDialog) view(m *Model, maxW, maxH int) string {
 			m.sty.dim.Render("incoming  ")+m.truncRow(safetext.Clean(c.Incoming), iw-10))
 	}
 	lines = append(lines, "")
+	for _, l := range noteRows {
+		lines = append(lines, m.sty.warn.Render(l))
+	}
 	for _, l := range legend {
 		lines = append(lines, m.sty.dim.Render(l))
 	}

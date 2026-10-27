@@ -113,6 +113,15 @@ func (a *app) readLine() (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
+// warnForeignKubeconfig warns when $KUBECONFIG is set outside a kx shell:
+// kubectl then reads that file and ignores the kx project the command edits.
+func (a *app) warnForeignKubeconfig() {
+	if a.Env.InShell || a.Env.Kubeconfig == "" {
+		return
+	}
+	_, _ = fmt.Fprintf(a.Err, "warning: KUBECONFIG is set to %s; kubectl reads $KUBECONFIG, not the kx project, so this does not affect kubectl in this shell\n", safetext.Clean(a.Env.Kubeconfig))
+}
+
 // warnLiveShells tells the user when kx shells are running for project.
 func (a *app) warnLiveShells(project string) {
 	pids, err := a.Store.LiveShells(project)

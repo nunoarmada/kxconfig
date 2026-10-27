@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nunoarmada/kxconfig/v2/internal/backup"
 	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
@@ -73,20 +74,30 @@ func (a *app) newDelete() *cobra.Command {
 }
 
 func (a *app) newBackups() *cobra.Command {
-	return &cobra.Command{
-		Use:   "backups PROJECT",
-		Short: "List a project's backups, newest first",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			if err := store.ValidateName(args[0]); err != nil {
-				return err
+	var initial bool
+	cmd := &cobra.Command{
+		Use:   "backups PROJECT | --initial",
+		Short: "List a project's backups, newest first (--initial: of the original ~/.kube/config)",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if initial {
+				return cobra.NoArgs(cmd, args)
 			}
-			bs, err := a.Store.Backups.List(args[0])
+			return cobra.ExactArgs(1)(cmd, args)
+		},
+		RunE: func(_ *cobra.Command, args []string) error {
+			name := backup.InitialProject
+			if !initial {
+				name = args[0]
+				if err := store.ValidateName(name); err != nil {
+					return err
+				}
+			}
+			bs, err := a.Store.Backups.List(name)
 			if err != nil {
 				return err
 			}
 			if len(bs) == 0 {
-				_, _ = fmt.Fprintf(a.Out, "No backups for project %s\n", safetext.Clean(args[0]))
+				_, _ = fmt.Fprintf(a.Out, "No backups for project %s\n", safetext.Clean(name))
 				return nil
 			}
 			tw := tabwriter.NewWriter(a.Out, 0, 4, 2, ' ', 0)
@@ -98,6 +109,8 @@ func (a *app) newBackups() *cobra.Command {
 		},
 		ValidArgsFunction: a.projectArgs,
 	}
+	cmd.Flags().BoolVar(&initial, "initial", false, "list the backups of the original ~/.kube/config files kx adopted")
+	return cmd
 }
 
 // requireProject fails with ErrNotFound unless the project's file exists.
@@ -115,12 +128,26 @@ func (a *app) requireProject(name string) error {
 }
 
 func (a *app) newRestore() *cobra.Command {
-	var yes bool
+	var yes, initial bool
+	var as string
 	cmd := &cobra.Command{
-		Use:   "restore PROJECT [ID]",
+		Use:   "restore PROJECT [ID] | --initial [ID] --as NAME",
 		Short: "Restore a project from a backup (default: the latest)",
-		Args:  cobra.RangeArgs(1, 2),
+		Long: `Restore a project from one of its backups; the current file is backed up first.
+
+With --initial, the original ~/.kube/config that kx backed up when it first
+replaced it (see 'kx backups --initial') is written to a NEW project given by
+--as. It never overwrites an existing project or ~/.kube/config.`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if initial {
+				return cobra.MaximumNArgs(1)(cmd, args)
+			}
+			return cobra.RangeArgs(1, 2)(cmd, args)
+		},
 		RunE: func(_ *cobra.Command, args []string) error {
+			if initial {
+				return a.restoreInitial(args, as)
+			}
 			name := args[0]
 			if err := store.ValidateName(name); err != nil {
 				return err
@@ -169,5 +196,24 @@ func (a *app) newRestore() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask for confirmation")
+	cmd.Flags().BoolVar(&initial, "initial", false, "restore a backup of the original ~/.kube/config as a new project (needs --as)")
+	cmd.Flags().StringVar(&as, "as", "", "with --initial: the new project `NAME`")
 	return cmd
+}
+
+// restoreInitial writes an "_initial" backup (the newest unless args has an
+// ID) to the new project as.
+func (a *app) restoreInitial(args []string, as string) error {
+	if as == "" {
+		return errors.New("restore --initial needs --as NAME: the new project to write the original config to")
+	}
+	id := ""
+	if len(args) == 1 {
+		id = args[0]
+	}
+	if err := a.Store.RestoreInitial(id, as); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(a.Out, "Restored the original config as project %s (activate it with 'kx use %s')\n", safetext.Clean(as), safetext.Clean(as))
+	return nil
 }

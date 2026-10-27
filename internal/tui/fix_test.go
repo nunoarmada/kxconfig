@@ -96,6 +96,9 @@ func TestStaleDerivedConflictIsDropped(t *testing.T) {
 	mustContain(t, plain(m), "3 conflicts")
 	m = keys(m, "k", "k", "s") // change the cluster to skip: the context is dropped, no longer conflicts
 	m = keys(m, "enter")
+	// Overwriting the user still re-points the existing prod-eu: confirm it.
+	mustContain(t, plain(m), "Overwrite re-points existing contexts: prod-eu")
+	m = keys(m, "enter")
 	if len(m.dialogs) != 0 {
 		t.Fatalf("stale derived row blocked the import:\n%s", plain(m))
 	}
@@ -314,4 +317,106 @@ func TestAdoptCopy(t *testing.T) {
 func TestNamespaceLeaveEmptyNote(t *testing.T) {
 	m := keys(open(t, fixture(t), 100, 30), "tab", "n")
 	mustContain(t, plain(m), "Leave empty to clear")
+}
+
+// All-overwrite of conflictingIncoming re-points prod-eu (it stays on the
+// overwritten cluster eks-eu and user): the screen must say so and ask twice.
+func TestConflictOverwriteShowsAndConfirmsReboundContexts(t *testing.T) {
+	root := fixture(t)
+	file := conflictingIncoming(t)
+	m := open(t, root, 140, 30)
+	m = keys(typeText(keys(m, "i"), file), "enter", "enter")
+	mustNotContain(t, plain(m), "re-points existing contexts")
+
+	m = keys(m, "o") // cluster row -> overwrite
+	mustContain(t, plain(m), "Overwriting cluster eks-eu re-points existing contexts: prod-eu")
+	m = keys(m, "r")
+	mustNotContain(t, plain(m), "re-points existing contexts")
+	m = keys(m, "O")
+
+	before := snapshot(t, root)
+	m = keys(m, "enter")
+	mustContain(t, plain(m), "Overwrite re-points existing contexts: prod-eu", "enter again")
+	if len(m.dialogs) != 1 {
+		t.Fatal("the conflict screen must stay open until confirmed")
+	}
+	sameSnapshot(t, before, snapshot(t, root))
+
+	m = keys(m, "enter")
+	if len(m.dialogs) != 0 {
+		t.Fatalf("dialog still open after the confirming enter: %d", len(m.dialogs))
+	}
+	mustContain(t, plain(m), "re-pointed contexts: prod-eu")
+	if cfg := loadProject(t, root, "prod"); !strings.Contains(cfg.Clusters["eks-eu"].Server, "NEW") {
+		t.Errorf("overwrite not applied: %+v", cfg.Clusters["eks-eu"])
+	}
+}
+
+func TestConflictChangingChoiceAsksAgain(t *testing.T) {
+	root := fixture(t)
+	m := open(t, root, 140, 30)
+	m = keys(typeText(keys(m, "i"), conflictingIncoming(t)), "enter", "enter", "O", "enter")
+	mustContain(t, plain(m), "enter again")
+	m = keys(m, "S") // everything skipped: nothing is re-pointed
+	m = keys(m, "enter")
+	if len(m.dialogs) != 0 {
+		t.Fatal("skip-all must apply without a confirmation")
+	}
+	mustNotContain(t, plain(m), "now use the incoming")
+}
+
+func TestDetailsShowRedactedServer(t *testing.T) {
+	root := fixture(t)
+	writeProject(t, root, "staging", kubeconfig("stg",
+		ctxSpec{"stg", "stg-cluster", "https://u:pw@h.example:6443/x?token=t#f", "stg-user", "web", "token"}), 0o600)
+	m := open(t, root, 140, 30)
+	m = keys(m, "j") // staging
+	v := plain(m)
+	mustContain(t, v, "https://h.example:6443/x")
+	mustNotContain(t, v, "u:pw", "token=t", "#f")
+}
+
+func TestBannerWarnsWhenKubeconfigIsSet(t *testing.T) {
+	root := fixture(t)
+	m := send(New(store.New(root), store.Env{Kubeconfig: "/elsewhere/cfg"}), tea.WindowSizeMsg{Width: 140, Height: 30})
+	mustContain(t, plain(m), "KUBECONFIG", "kubectl reads $KUBECONFIG, not the kx project")
+	m = send(New(store.New(root), store.Env{Kubeconfig: "/x", InShell: true, Project: "prod"}), tea.WindowSizeMsg{Width: 140, Height: 30})
+	mustNotContain(t, plain(m), "kubectl reads $KUBECONFIG")
+	m = send(New(store.New(root), store.Env{}), tea.WindowSizeMsg{Width: 140, Height: 30})
+	mustNotContain(t, plain(m), "kubectl reads $KUBECONFIG")
+}
+
+func TestEditBacksUpFirst(t *testing.T) {
+	root := fixture(t)
+	m := open(t, root, 140, 30)
+	t.Setenv("EDITOR", "true")
+	orig, _ := os.ReadFile(filepath.Join(root, "config-prod"))
+	_, cmd := sendCmd(m, press("e"))
+	if cmd == nil {
+		t.Fatal("e must return an exec command")
+	}
+	bs, err := m.store.Backups.List("prod")
+	if err != nil || len(bs) != 1 || bs[0].Op != "edit" {
+		t.Fatalf("backups = %+v, %v; want one edit backup", bs, err)
+	}
+	if got, _ := os.ReadFile(bs[0].Path); string(got) != string(orig) {
+		t.Fatal("backup differs from the file before editing")
+	}
+}
+
+func TestEditDoesNotLaunchWhenBackupFails(t *testing.T) {
+	root := fixture(t)
+	m := open(t, root, 140, 30)
+	t.Setenv("EDITOR", "true")
+	// A regular file where the backups dir must go makes every backup fail.
+	if err := os.MkdirAll(filepath.Join(root, "kx"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "kx", "backups"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The only command is the status expiry (not running it: it sleeps), so
+	// the failure is reported instead of starting the editor.
+	m2, _ := sendCmd(m, press("e"))
+	mustContain(t, plain(m2), "✗ Could not back up prod")
 }

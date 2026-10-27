@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nunoarmada/kxconfig/v2/internal/backup"
 	"github.com/nunoarmada/kxconfig/v2/internal/safetext"
 	"github.com/nunoarmada/kxconfig/v2/internal/store"
 )
@@ -104,8 +105,8 @@ func (a *app) replaceForeign() error {
 	if err := a.Store.AdoptForeign(""); err != nil {
 		return err
 	}
-	where := filepath.Join(a.Store.Backups.Dir, "_initial")
-	if bs, err := a.Store.Backups.List("_initial"); err == nil && len(bs) > 0 {
+	where := filepath.Join(a.Store.Backups.Dir, backup.InitialProject)
+	if bs, err := a.Store.Backups.List(backup.InitialProject); err == nil && len(bs) > 0 {
 		where = bs[0].Path
 	}
 	_, _ = fmt.Fprintf(a.Out, "Replaced %s; the previous file is backed up at %s\n", a.Store.ConfigPath(), where)

@@ -144,12 +144,18 @@ func TestImportFlowWithConflictsRename(t *testing.T) {
 	mustContain(t, plain(m), "⚠ 1 conflict unresolved")
 	m = keys(m, "r")
 
+	// Overwriting the user re-points the existing prod-eu context (the
+	// incoming one was renamed): the screen asks once more.
+	before = snapshot(t, root)
+	m = keys(m, "enter")
+	mustContain(t, plain(m), "Overwrite re-points existing contexts: prod-eu", "enter again")
+	sameSnapshot(t, before, snapshot(t, root))
 	m = keys(m, "enter")
 	if len(m.dialogs) != 0 {
 		t.Fatalf("dialog still open after apply: %d", len(m.dialogs))
 	}
 	v = plain(m)
-	mustContain(t, v, "Imported eu.yaml into prod:", "renamed", "overwritten")
+	mustContain(t, v, "Imported eu.yaml into prod:", "renamed", "overwritten", "re-pointed contexts: prod-eu")
 
 	cfg := loadProject(t, root, "prod")
 	if cfg.Clusters["eks-eu"] == nil || !strings.Contains(cfg.Clusters["eks-eu"].Server, "A1B2C3") {

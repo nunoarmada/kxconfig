@@ -29,7 +29,7 @@ func (a *app) newImport() *cobra.Command {
 	a.projectFlag(cmd, &project, "target project `NAME` (created if missing)")
 	cmd.Flags().BoolVar(&replace, "replace", false, "replace the project with the file instead of merging")
 	cmd.Flags().StringVar(&onConflict, "on-conflict", "fail", "what to do with same-name entries that differ: fail, rename, overwrite or skip")
-	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask for confirmation when replacing")
+	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask for confirmation when replacing, or when overwriting re-points existing contexts")
 	cmd.Flags().BoolVar(&useAfter, "use", false, "activate the project afterwards")
 	_ = cmd.RegisterFlagCompletionFunc("on-conflict", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return []string{"fail", "rename", "overwrite", "skip"}, cobra.ShellCompDirectiveNoFileComp
@@ -41,6 +41,9 @@ func (a *app) importCmd(file, project, onConflict string, replace, useAfter, yes
 	policy, err := kubecfg.ParsePolicy(onConflict)
 	if err != nil {
 		return err
+	}
+	if useAfter && a.Env.InShell {
+		return errors.New("refused inside a kx shell: --use would change the global project; exit the shell first")
 	}
 	if project == "" {
 		if project, err = a.askProjectName(file); err != nil {
@@ -57,7 +60,13 @@ func (a *app) importCmd(file, project, onConflict string, replace, useAfter, yes
 			}
 		}
 	}
-	res, err := a.Store.Import(file, project, mode, kubecfg.MergeOptions{Default: policy})
+	opts := kubecfg.MergeOptions{Default: policy}
+	if mode == store.ImportMerge && policy == kubecfg.PolicyOverwrite {
+		if err := a.confirmRebound(file, project, opts, yes); err != nil {
+			return err
+		}
+	}
+	res, err := a.Store.Import(file, project, mode, opts)
 	for _, w := range res.Warnings {
 		_, _ = fmt.Fprintf(a.Err, "warning: %s\n", safetext.Clean(w))
 	}
@@ -73,6 +82,25 @@ func (a *app) importCmd(file, project, onConflict string, replace, useAfter, yes
 		return a.useCmd(project, "", false)
 	}
 	return nil
+}
+
+// confirmRebound previews the merge and, when overwriting would re-point
+// existing contexts at the incoming cluster/user, lists them and asks for
+// confirmation (--yes without a terminal). Nothing is written before that.
+func (a *app) confirmRebound(file, project string, opts kubecfg.MergeOptions, yes bool) error {
+	rep, err := a.Store.PreviewMerge(file, project, opts)
+	if err != nil || len(rep.Rebound) == 0 {
+		return nil // Import reports real errors itself
+	}
+	var names []string
+	for _, r := range rep.Rebound {
+		names = append(names, safetext.Clean(r.Name))
+	}
+	_, _ = fmt.Fprintf(a.Err, "warning: these existing contexts now use the incoming cluster/user: %s\n", strings.Join(names, ", "))
+	if yes {
+		return nil
+	}
+	return a.confirm(fmt.Sprintf("Overwrite and re-point %s in project %s (a backup is kept)?", plural(len(names), "context"), project))
 }
 
 // askProjectName prompts for a project name on a terminal; the default is the

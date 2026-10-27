@@ -23,6 +23,7 @@ func (a *app) newCtx() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			a.warnForeignKubeconfig()
 			if len(args) == 1 {
 				if err := a.Store.SetContext(t, args[0]); err != nil {
 					return err
@@ -60,13 +61,17 @@ func (a *app) newNs() *cobra.Command {
 	var project string
 	cmd := &cobra.Command{
 		Use:   "ns NAMESPACE",
-		Short: "Set the namespace of the current context",
+		Short: "Set the namespace of the current context (\"\" clears it)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if args[0] != "" && !kubecfg.ValidNamespace(args[0]) {
+				return fmt.Errorf("invalid namespace %q: use lowercase letters, digits and '-' (max 63), starting and ending with a letter or digit (\"\" clears it)", safetext.Clean(args[0]))
+			}
 			t, err := a.Store.Target(project, a.Env)
 			if err != nil {
 				return err
 			}
+			a.warnForeignKubeconfig()
 			if err := a.Store.SetNamespace(t, args[0]); err != nil {
 				return err
 			}
