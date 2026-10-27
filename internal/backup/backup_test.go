@@ -186,3 +186,37 @@ func TestGetUnknown(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateRejectsBadOp(t *testing.T) {
+	m, src := newManager(t, time.Second)
+	for _, op := range []string{"", "a/b", "..", "../x", "merge-2", "Merge", "-x", "x-", "a--b", "1a", "a b"} {
+		if _, err := m.Create("proj", op, src); err == nil {
+			t.Errorf("op %q accepted", op)
+		}
+	}
+	for _, op := range []string{"import", "replace", "rmctx", "rename", "delete", "restore", "prerestore", "adopt", "doctor", "a-b"} {
+		if _, err := m.Create("proj", op, src); err != nil {
+			t.Errorf("op %q rejected: %v", op, err)
+		}
+	}
+}
+
+func TestCreatePruneErrorKeepsBackup(t *testing.T) {
+	m, src := newManager(t, time.Second)
+	boom := errors.New("boom")
+	m.remove = func(string) error { return boom }
+	var last Backup
+	var err error
+	for i := 0; i <= Keep; i++ {
+		last, err = m.Create("proj", "merge", src)
+	}
+	if !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want wrapping boom", err)
+	}
+	if last.ID == "" {
+		t.Fatal("backup not returned with prune error")
+	}
+	if _, serr := os.Stat(last.Path); serr != nil {
+		t.Errorf("created backup missing: %v", serr)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,7 +29,11 @@ const (
 type Manager struct {
 	Dir string           // <root>/kx/backups
 	Now func() time.Time // defaults to time.Now
+
+	remove func(string) error // defaults to os.Remove; overridden in tests
 }
+
+var opRe = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$`)
 
 // Backup describes one stored backup file.
 type Backup struct {
@@ -53,8 +58,15 @@ func (m *Manager) projectDir(project string) string {
 }
 
 // Create copies src into the project's backup dir and prunes old backups.
-// Project names must already be validated by the caller.
+// Project names must already be validated by the caller; op must match
+// opRe (lowercase words joined by "-", no trailing "-<digits>").
+//
+// If the copy succeeds but pruning old backups fails, Create returns the
+// created Backup together with a non-nil error wrapping the prune failure.
 func (m *Manager) Create(project, op, src string) (Backup, error) {
+	if !opRe.MatchString(op) {
+		return Backup{}, fmt.Errorf("invalid backup op %q", op)
+	}
 	dir := m.projectDir(project)
 	if err := fsutil.EnsureDir(m.Dir); err != nil {
 		return Backup{}, err
@@ -79,10 +91,11 @@ func (m *Manager) Create(project, op, src string) (Backup, error) {
 	if err := fsutil.CopyFile(src, path); err != nil {
 		return Backup{}, fmt.Errorf("create backup: %w", err)
 	}
+	b := Backup{ID: id, Project: project, Op: op, Path: path, Time: t}
 	if err := m.prune(project); err != nil {
-		return Backup{}, fmt.Errorf("prune backups: %w", err)
+		return b, fmt.Errorf("prune backups: %w", err)
 	}
-	return Backup{ID: id, Project: project, Op: op, Path: path, Time: t}, nil
+	return b, nil
 }
 
 // List returns the project's backups, newest first. A missing directory yields
@@ -173,8 +186,12 @@ func (m *Manager) prune(project string) error {
 	if err != nil {
 		return err
 	}
+	rm := m.remove
+	if rm == nil {
+		rm = os.Remove
+	}
 	for _, e := range entries[min(Keep, len(entries)):] {
-		if err := os.Remove(e.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := rm(e.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 	}
