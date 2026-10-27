@@ -118,8 +118,6 @@ func (m Model) bannerText() (text string, warn bool) {
 	case m.env.InShell:
 		return m.gl.info + " Inside kx shell for " + m.env.Project +
 			": context/namespace changes stay in this shell. Exit it to switch projects.", false
-	case m.env.Kubeconfig != "":
-		return m.gl.warn + " KUBECONFIG is set (" + m.env.Kubeconfig + "): kubectl reads $KUBECONFIG, not the kx project.", true
 	case m.link == store.LinkBroken:
 		return m.gl.warn + " " + cfg + " points to a missing project (" + filepath.Base(m.linkTarget) +
 			"). Press enter on a project to fix it.", true
@@ -130,6 +128,8 @@ func (m Model) bannerText() (text string, warn bool) {
 		return "", false // the empty state already offers "a adopt"
 	case m.link == store.LinkForeignFile:
 		return m.gl.info + " " + cfg + " is not managed by kx yet. Using a project backs it up first.", false
+	case m.env.Kubeconfig != "" && !m.store.KubeconfigIsKx(m.env.Kubeconfig, m.cur.path):
+		return m.gl.warn + " KUBECONFIG is set (" + m.env.Kubeconfig + "): kubectl reads $KUBECONFIG, not the kx project.", true
 	}
 	return "", false
 }

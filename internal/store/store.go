@@ -182,3 +182,34 @@ func (s *Store) setPrevious(name string) error {
 	}
 	return fsutil.WriteFileAtomic(s.statePath(), append(data, '\n'))
 }
+
+// KubeconfigIsKx reports whether kc, a $KUBECONFIG value, is a single path
+// that resolves to <root>/config, the active project's file or one of extra:
+// kubectl then reads what kx edits, so there is nothing to warn about.
+func (s *Store) KubeconfigIsKx(kc string, extra ...string) bool {
+	if kc == "" || strings.ContainsRune(kc, filepath.ListSeparator) {
+		return false
+	}
+	targets := append([]string{s.ConfigPath()}, extra...)
+	if name, st, err := s.Active(); err == nil && st == LinkOK {
+		targets = append(targets, s.ProjectPath(name))
+	}
+	want := resolvePath(kc)
+	for _, t := range targets {
+		if t != "" && resolvePath(t) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePath makes p absolute and follows symlinks where it can.
+func resolvePath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}

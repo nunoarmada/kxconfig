@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -144,4 +145,18 @@ func WithLock(path string, fn func() error) error {
 	}
 	defer func() { _ = os.Remove(lock) }()
 	return fn()
+}
+
+// WithLocks is WithLock for several files: the locks are taken in sorted path
+// order (so two kx processes cannot deadlock) and all are released when fn
+// returns or one of them cannot be taken.
+func WithLocks(paths []string, fn func() error) error {
+	sorted := slices.Sorted(slices.Values(paths))
+	sorted = slices.Compact(sorted)
+	run := fn
+	for i := len(sorted) - 1; i >= 0; i-- {
+		inner, p := run, sorted[i]
+		run = func() error { return WithLock(p, inner) }
+	}
+	return run()
 }

@@ -87,9 +87,20 @@ func readProjectFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	if len(data) == 0 {
-		return nil, fmt.Errorf("%s: %w", path, ErrEmptyProject)
+		return nil, fmt.Errorf("read %s: %w", path, ErrEmptyProject)
 	}
 	return data, nil
+}
+
+// writeLocks lists the lock files to hold while rewriting project's master at
+// path: its own and, when it is the active project, ~/.kube/config.lock too,
+// which is the one kubectl takes (it opens ~/.kube/config).
+func (s *Store) writeLocks(project, path string) []string {
+	paths := []string{path}
+	if name, st, err := s.Active(); err == nil && st == LinkOK && name == project && path == s.ProjectPath(project) {
+		paths = append(paths, s.ConfigPath())
+	}
+	return paths
 }
 
 // BackupProject takes a backup of project's master file under op (for example
@@ -173,7 +184,7 @@ func (s *Store) Import(file, project string, mode ImportMode, opts kubecfg.Merge
 
 	// The merge result is built from the raw master so untouched entries
 	// keep their file references; flattened copies are only used to compare.
-	return res, fsutil.WithLock(path, func() error {
+	err = fsutil.WithLocks(s.writeLocks(project, path), func() error {
 		data, err := readProjectFile(path)
 		if err != nil {
 			return err
@@ -212,6 +223,7 @@ func (s *Store) Import(file, project string, mode ImportMode, opts kubecfg.Merge
 		res.Changed = true
 		return nil
 	})
+	return res, err
 }
 
 // sameConfig reports whether a and b hold the same kubeconfig, ignoring how
@@ -291,7 +303,7 @@ func (s *Store) RemoveContext(project, ctx string, keepOrphans bool) (kubecfg.De
 	}
 	path := s.ProjectPath(project)
 	var rep kubecfg.DeleteReport
-	err = fsutil.WithLock(path, func() error {
+	err = fsutil.WithLocks(s.writeLocks(project, path), func() error {
 		data, err := readProjectFile(path)
 		if err != nil {
 			return err
@@ -475,7 +487,7 @@ func (s *Store) Restore(project, id string) error {
 		}
 		return fsutil.WriteFileAtomic(path, data)
 	}
-	return fsutil.WithLock(path, func() error {
+	return fsutil.WithLocks(s.writeLocks(project, path), func() error {
 		// An empty current file is allowed here: restoring is how it is fixed.
 		cur, err := os.ReadFile(path)
 		if err != nil {
@@ -579,20 +591,20 @@ func (s *Store) Target(projectFlag string, env Env) (Target, error) {
 // SetContext makes ctx the current context of the target file. No backup:
 // only the current-context field changes.
 func (s *Store) SetContext(t Target, ctx string) error {
-	return editTarget(t, func(cfg *api.Config) error { return kubecfg.SetCurrentContext(cfg, ctx) })
+	return s.editTarget(t, func(cfg *api.Config) error { return kubecfg.SetCurrentContext(cfg, ctx) })
 }
 
 // SetNamespace sets the namespace of the target's current context. No backup:
 // only one field changes and it is trivially reversible.
 func (s *Store) SetNamespace(t Target, ns string) error {
-	return editTarget(t, func(cfg *api.Config) error { return kubecfg.SetNamespace(cfg, ns) })
+	return s.editTarget(t, func(cfg *api.Config) error { return kubecfg.SetNamespace(cfg, ns) })
 }
 
-func editTarget(t Target, edit func(*api.Config) error) error {
-	return fsutil.WithLock(t.Path, func() error {
+func (s *Store) editTarget(t Target, edit func(*api.Config) error) error {
+	return fsutil.WithLocks(s.writeLocks(t.Project, t.Path), func() error {
 		data, err := readProjectFile(t.Path)
 		if err != nil {
-			return fmt.Errorf("read %s: %w", t.Path, err)
+			return err
 		}
 		cfg, err := kubecfg.LoadBytes(data, t.Path)
 		if err != nil {

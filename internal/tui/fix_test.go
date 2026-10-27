@@ -420,3 +420,18 @@ func TestEditDoesNotLaunchWhenBackupFails(t *testing.T) {
 	m2, _ := sendCmd(m, press("e"))
 	mustContain(t, plain(m2), "✗ Could not back up prod")
 }
+
+func TestKubeconfigBannerSkippedForTheKxFileAndYieldsToLinkWarnings(t *testing.T) {
+	root := fixture(t)
+	for _, kc := range []string{filepath.Join(root, "config"), filepath.Join(root, "config-prod")} {
+		m := send(New(store.New(root), store.Env{Kubeconfig: kc}), tea.WindowSizeMsg{Width: 140, Height: 30})
+		mustNotContain(t, plain(m), "kubectl reads $KUBECONFIG")
+	}
+	// A broken link is the more urgent banner.
+	if err := os.Remove(filepath.Join(root, "config-prod")); err != nil {
+		t.Fatal(err)
+	}
+	m := send(New(store.New(root), store.Env{Kubeconfig: "/elsewhere/cfg"}), tea.WindowSizeMsg{Width: 140, Height: 30})
+	mustContain(t, plain(m), "points to a missing project")
+	mustNotContain(t, plain(m), "kubectl reads $KUBECONFIG")
+}

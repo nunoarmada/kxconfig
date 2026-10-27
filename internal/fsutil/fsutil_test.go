@@ -192,3 +192,45 @@ func TestWithLockRemovesLockOnError(t *testing.T) {
 		t.Fatalf("lock file left behind: %v", err)
 	}
 }
+
+func TestWithLocksTakesAllAndReleases(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	err := WithLocks([]string{b, a}, func() error {
+		for _, p := range []string{a, b} {
+			if _, err := os.Stat(p + ".lock"); err != nil {
+				t.Errorf("lock for %s missing: %v", p, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{a, b} {
+		if _, err := os.Stat(p + ".lock"); !os.IsNotExist(err) {
+			t.Errorf("lock for %s left behind", p)
+		}
+	}
+}
+
+func TestWithLocksReleasesOnFailure(t *testing.T) {
+	old := LockWait
+	LockWait = 40 * time.Millisecond
+	defer func() { LockWait = old }()
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	if err := os.WriteFile(b+".lock", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ran := false
+	if err := WithLocks([]string{a, b}, func() error { ran = true; return nil }); err == nil || ran {
+		t.Fatalf("err = %v, ran = %v; want a lock error", err, ran)
+	}
+	if _, err := os.Stat(a + ".lock"); !os.IsNotExist(err) {
+		t.Fatal("the first lock was not released after the second failed")
+	}
+	if _, err := os.Stat(b + ".lock"); err != nil {
+		t.Fatal("someone else's lock was removed")
+	}
+}

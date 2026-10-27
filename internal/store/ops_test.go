@@ -893,3 +893,32 @@ func TestRestoreInitialWritesNewProject(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestActiveProjectWritesLockConfigToo(t *testing.T) {
+	old := fsutil.LockWait
+	fsutil.LockWait = 40 * time.Millisecond
+	defer func() { fsutil.LockWait = old }()
+	s := newStore(t)
+	addProject(t, s, "dev", mkCfg("a", "ca", "https://a", "ua", "t1"))
+	addProject(t, s, "other", mkCfg("a", "ca", "https://a", "ua", "t1"))
+	if err := s.Use("dev"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, s.ConfigPath()+".lock", "", 0o600) // kubectl modifying ~/.kube/config
+	err := s.SetNamespace(Target{Path: s.ProjectPath("dev"), Project: "dev"}, "x")
+	if err == nil || !strings.Contains(err.Error(), "config.lock") {
+		t.Fatalf("active project: err = %v, want a lock error naming config.lock", err)
+	}
+	if err := s.SetNamespace(Target{Path: s.ProjectPath("other"), Project: "other"}, "x"); err != nil {
+		t.Fatalf("inactive project must not need config.lock: %v", err)
+	}
+}
+
+func TestEmptyFileErrorNamesPathOnce(t *testing.T) {
+	s := newStore(t)
+	writeFile(t, s.ProjectPath("dev"), "", 0o600)
+	err := s.SetNamespace(Target{Path: s.ProjectPath("dev"), Project: "dev"}, "x")
+	if err == nil || strings.Count(err.Error(), s.ProjectPath("dev")) != 1 || !strings.HasPrefix(err.Error(), "read ") {
+		t.Fatalf("err = %v", err)
+	}
+}

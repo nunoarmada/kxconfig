@@ -23,7 +23,7 @@ func (a *app) newCtx() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			a.warnForeignKubeconfig()
+			a.warnForeignKubeconfig(t.Path)
 			if len(args) == 1 {
 				if err := a.Store.SetContext(t, args[0]); err != nil {
 					return err
@@ -71,7 +71,7 @@ func (a *app) newNs() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			a.warnForeignKubeconfig()
+			a.warnForeignKubeconfig(t.Path)
 			if err := a.Store.SetNamespace(t, args[0]); err != nil {
 				return err
 			}

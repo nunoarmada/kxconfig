@@ -106,7 +106,8 @@ tview remains an acceptable fallback).
   [ID] --as NAME` (never over an existing project or `~/.kube/config`).
 - Read-modify-write operations read the project file once, back up exactly
   those bytes, refuse a zero-length file and hold the client-go lock file
-  `<file>.lock` while writing, so they do not race with kubectl.
+  `<file>.lock` (plus `~/.kube/config.lock` for the active project, which is
+  what kubectl locks) while writing, so they do not race with kubectl.
 - All writes are atomic for project files (write temp in same dir with 0600,
   fsync, rename). Writes through the active symlink follow it (verified:
   client-go `WriteToFile` uses `os.WriteFile`, which follows symlinks).

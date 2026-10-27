@@ -304,12 +304,8 @@ func newConflictDialog(m *Model, file, typed, project string, cs []kubecfg.Confl
 	}
 	// Count the entities that are new in the project, for the footer. Any
 	// policy that resolves conflicts gives the same Added list.
-	incoming, err1 := kubecfg.LoadFlattened(file)
-	master, err2 := kubecfg.LoadFlattened(m.store.ProjectPath(project))
-	if err1 == nil && err2 == nil {
-		if _, rep, err := kubecfg.Merge(master, incoming, kubecfg.MergeOptions{Default: kubecfg.PolicyOverwrite}); err == nil {
-			d.added = len(rep.Added)
-		}
+	if rep, err := m.store.PreviewMerge(file, project, kubecfg.MergeOptions{Default: kubecfg.PolicyOverwrite}); err == nil {
+		d.added = len(rep.Added)
 	}
 	return d
 }
@@ -444,19 +440,17 @@ func (d *conflictDialog) unresolvedBase() int {
 // returns the status command when new rows appeared (the user must look), and
 // nil otherwise.
 func (d *conflictDialog) syncDerived(m *Model) tea.Cmd {
-	incoming, err1 := kubecfg.LoadFlattened(d.file)
-	master, err2 := kubecfg.LoadFlattened(m.store.ProjectPath(d.project))
-	if err1 != nil || err2 != nil {
-		return nil // Import reports the real error on apply
-	}
 	per := map[kubecfg.EntityRef]kubecfg.ConflictPolicy{}
 	for _, c := range d.cs[:d.base] {
 		per[c.Ref] = d.pol[c.Ref]
 	}
-	_, rep, err := kubecfg.Merge(master, incoming, kubecfg.MergeOptions{Default: kubecfg.PolicyFail, PerItem: per})
-	if err == nil || !errors.Is(err, kubecfg.ErrConflicts) {
+	rep, err := m.store.PreviewMerge(d.file, d.project, kubecfg.MergeOptions{Default: kubecfg.PolicyFail, PerItem: per})
+	if err == nil {
 		d.dropDerived(nil)
 		return nil
+	}
+	if !errors.Is(err, kubecfg.ErrConflicts) {
+		return nil // Import reports the real error on apply
 	}
 	old := map[kubecfg.EntityRef]bool{}
 	for _, c := range d.cs[d.base:] {

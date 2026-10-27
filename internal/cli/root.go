@@ -113,10 +113,11 @@ func (a *app) readLine() (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-// warnForeignKubeconfig warns when $KUBECONFIG is set outside a kx shell:
+// warnForeignKubeconfig warns when $KUBECONFIG is set outside a kx shell to
+// something other than the kx config (or target, the file being edited):
 // kubectl then reads that file and ignores the kx project the command edits.
-func (a *app) warnForeignKubeconfig() {
-	if a.Env.InShell || a.Env.Kubeconfig == "" {
+func (a *app) warnForeignKubeconfig(target string) {
+	if a.Env.InShell || a.Env.Kubeconfig == "" || a.Store.KubeconfigIsKx(a.Env.Kubeconfig, target) {
 		return
 	}
 	_, _ = fmt.Fprintf(a.Err, "warning: KUBECONFIG is set to %s; kubectl reads $KUBECONFIG, not the kx project, so this does not affect kubectl in this shell\n", safetext.Clean(a.Env.Kubeconfig))

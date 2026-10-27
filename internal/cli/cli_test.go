@@ -988,3 +988,23 @@ func TestImportThenUseAdoptsForeignConfigSilently(t *testing.T) {
 		t.Fatalf("backup = %q", got)
 	}
 }
+
+func TestKubeconfigWarningSkippedWhenItIsTheKxFile(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("import", h.write("a.yaml", kcTwoYAML()), "-p", "a")
+	h.mustRun("use", "a")
+	for name, kc := range map[string]string{
+		"config link":  h.d.Store.ConfigPath(),
+		"project file": h.d.Store.ProjectPath("a"),
+		"dotted path":  filepath.Join(h.d.Store.Root, "kx", "..", "config"),
+	} {
+		h.d.Env = store.Env{Kubeconfig: kc}
+		if _, _, errOut := h.run("ns", "kube-system"); strings.Contains(errOut, "KUBECONFIG") {
+			t.Errorf("%s: warned although kubectl reads the kx file: %q", name, errOut)
+		}
+	}
+	h.d.Env = store.Env{Kubeconfig: h.d.Store.ConfigPath() + string(filepath.ListSeparator) + "/other"}
+	if _, _, errOut := h.run("ns", "kube-system"); !strings.Contains(errOut, "KUBECONFIG") {
+		t.Error("a multi-entry KUBECONFIG must still warn")
+	}
+}
