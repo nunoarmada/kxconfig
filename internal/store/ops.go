@@ -591,7 +591,33 @@ func (s *Store) Target(projectFlag string, env Env) (Target, error) {
 // SetContext makes ctx the current context of the target file. No backup:
 // only the current-context field changes.
 func (s *Store) SetContext(t Target, ctx string) error {
-	return s.editTarget(t, func(cfg *api.Config) error { return kubecfg.SetCurrentContext(cfg, ctx) })
+	return s.editTarget(t, func(cfg *api.Config) error {
+		if err := kubecfg.SetCurrentContext(cfg, ctx); err != nil {
+			return err
+		}
+		kubecfg.FillNamespace(cfg)
+		return nil
+	})
+}
+
+// fillNamespace gives the project's current context the default namespace
+// when it has none, writing the file only if something changed.
+func (s *Store) fillNamespace(project string) error {
+	path := s.ProjectPath(project)
+	return fsutil.WithLocks(s.writeLocks(project, path), func() error {
+		data, err := readProjectFile(path)
+		if err != nil {
+			return err
+		}
+		cfg, err := kubecfg.LoadBytes(data, path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		if !kubecfg.FillNamespace(cfg) {
+			return nil
+		}
+		return kubecfg.Save(cfg, path)
+	})
 }
 
 // SetNamespace sets the namespace of the target's current context. No backup:

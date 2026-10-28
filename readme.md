@@ -139,7 +139,7 @@ or in zsh: `PROMPT='${KX_PROJECT:+[$KX_PROJECT] }'$PROMPT`.
 - **`KUBECONFIG`.** kubectl reads `$KUBECONFIG` when it is set, not the kx project. Outside a kx shell, `kx ctx`, `kx ns` and the TUI warn when it is set to something other than the kx config or project file, since the change would not reach kubectl in that terminal.
 - **Permissions.** Project files, backups and state are written atomically with mode `0600` (directories `0700`). `kx doctor` reports files that are more open than that, a broken or foreign `~/.kube/config`, and invalid project files; `kx doctor --fix` repairs permissions and stale shell copies.
 - **Deleting contexts.** `kx rm-ctx` also removes the cluster and user that no other context in that file uses, so credentials do not linger; `--keep-orphans` turns that off. It only touches the named project.
-- **Namespaces.** Switching project never changes a namespace; only `kx ns` or the UI does.
+- **Namespaces.** When you switch project or context and the new current context has no namespace, kx sets it to `default`, so kubectl and your prompt always show one. A namespace you chose (`kx ns`, `n` in the UI) is never overwritten.
 
 ## Migrating from 1.x
 

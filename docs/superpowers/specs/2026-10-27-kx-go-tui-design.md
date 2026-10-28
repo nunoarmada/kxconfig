@@ -185,8 +185,9 @@ copy" to fix up.
 
 ### Namespace (fixes 4)
 
-Switching projects never changes namespaces. Namespace changes only via
-`kx ns` / TUI action.
+Switching projects or contexts never overwrites a namespace. If the new current
+context has none, it is set to `default` (owner decision, 2026-10-28). Other
+namespace changes only via `kx ns` / TUI action.
 
 ### `kx shell <project>` (per-terminal mode)
 
