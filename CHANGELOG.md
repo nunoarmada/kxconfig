@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.0.1](https://github.com/nunoarmada/kxconfig/compare/v2.0.0...v2.0.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **kx:** activate the project when choosing one of its contexts in the TUI ([52da1fc](https://github.com/nunoarmada/kxconfig/commit/52da1fc3087429e82eded48b3b448d5ff618823c))
+* **kx:** activate the project when choosing one of its contexts in the TUI ([460e092](https://github.com/nunoarmada/kxconfig/commit/460e092dd0355cb683c79cb964268c023db1c487))
+* **kx:** activate the project when choosing one of its contexts in the TUI ([#12](https://github.com/nunoarmada/kxconfig/issues/12)) ([52da1fc](https://github.com/nunoarmada/kxconfig/commit/52da1fc3087429e82eded48b3b448d5ff618823c))
+
 ## [2.0.0](https://github.com/nunoarmada/kxconfig/compare/v1.6.0...v2.0.0) (2026-10-27)
 
 
