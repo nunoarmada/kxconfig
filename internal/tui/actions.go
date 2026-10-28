@@ -69,7 +69,21 @@ func (m *Model) setContext() tea.Cmd {
 	if err := m.store.SetContext(t, c.Name); err != nil {
 		return m.failed("set current context", err)
 	}
-	return m.afterUse("Set current context to " + c.Name)
+	if m.env.InShell || (p.Active && m.link == store.LinkOK) {
+		return m.afterUse("Set current context to " + c.Name)
+	}
+	// The project is not what kubectl reads yet: activate it too, as picking
+	// a context would otherwise change nothing for kubectl.
+	err := m.store.Use(p.Name)
+	switch {
+	case err == nil:
+		return m.afterUse("Activated " + p.Name + " with context " + c.Name)
+	case errors.Is(err, store.ErrForeignConfig):
+		_ = m.reload()
+		m.push(newAdoptDialog(p.Name))
+		return nil
+	}
+	return m.failed("use "+p.Name, err)
 }
 
 // adoptAndUse backs up a foreign ~/.kube/config (keeping it as project

@@ -945,3 +945,44 @@ func TestInvalidProjectNeverEchoesSecrets(t *testing.T) {
 		}
 	}
 }
+
+// Enter on a context of a project that is not active must also activate that
+// project: otherwise kubectl keeps reading the old ~/.kube/config.
+func TestContextEnterActivatesItsProject(t *testing.T) {
+	root := fixture(t)
+	m := open(t, root, 100, 30)
+	m = keys(m, "j", "tab", "enter") // staging, its only context "stg"
+	target, err := os.Readlink(filepath.Join(root, "config"))
+	if err != nil || target != "config-staging" {
+		t.Fatalf("config link = %q, %v; want config-staging", target, err)
+	}
+	cfg, err := kubecfg.Load(filepath.Join(root, "config-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CurrentContext != "stg" {
+		t.Fatalf("current-context = %q, want stg", cfg.CurrentContext)
+	}
+	mustContain(t, plain(m), "active: ● staging")
+}
+
+// With an unmanaged ~/.kube/config, Enter on a context offers adoption
+// instead of reporting success while kubectl still reads the old file.
+func TestContextEnterWithForeignConfigOffersAdoption(t *testing.T) {
+	root := fixture(t)
+	cfgPath := filepath.Join(root, "config")
+	if err := os.Remove(cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(kubeconfig("other", stg)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := open(t, root, 100, 30)
+	m = keys(m, "tab", "enter")
+	if len(m.dialogs) == 0 {
+		t.Fatalf("no adoption dialog; view:\n%s", plain(m))
+	}
+	if fi, err := os.Lstat(cfgPath); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("config must stay a regular file until the user chooses: %v %v", fi, err)
+	}
+}
