@@ -92,6 +92,21 @@ func SetNamespace(cfg *api.Config, ns string) error {
 	return nil
 }
 
+// DefaultNamespace is what kx writes into a current context that has none.
+const DefaultNamespace = "default"
+
+// FillNamespace sets DefaultNamespace on the current context when it has no
+// namespace, and reports whether it changed anything. A namespace already set
+// is kept, and a config without a usable current context is left alone.
+func FillNamespace(cfg *api.Config) bool {
+	c := cfg.Contexts[cfg.CurrentContext]
+	if cfg.CurrentContext == "" || c == nil || c.Namespace != "" {
+		return false
+	}
+	c.Namespace = DefaultNamespace
+	return true
+}
+
 // ContextInfo is a display-oriented view of a context.
 type ContextInfo struct {
 	Name, Cluster, User, Namespace, Server, AuthKind string

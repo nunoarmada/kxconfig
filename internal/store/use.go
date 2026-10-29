@@ -129,6 +129,9 @@ func (s *Store) Use(name string) error {
 			return fmt.Errorf("activated %s but could not record previous project: %w", name, err)
 		}
 	}
+	if err := s.fillNamespace(name); err != nil {
+		return fmt.Errorf("activated %s but could not set the default namespace: %w", name, err)
+	}
 	return nil
 }
 
