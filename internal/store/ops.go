@@ -643,6 +643,53 @@ func (s *Store) editTarget(t Target, edit func(*api.Config) error) error {
 	})
 }
 
+// RenameContext renames a context of the target file. A project's master
+// file is backed up first; a kx shell's private copy is not.
+func (s *Store) RenameContext(t Target, oldName, newName string) error {
+	return s.editTargetBackup(t, "renamectx", func(cfg *api.Config) error {
+		return kubecfg.RenameContext(cfg, oldName, newName)
+	})
+}
+
+// RenameCluster renames a cluster of the target file and repoints the
+// contexts that use it, which it returns. A project's master file is backed
+// up first; a kx shell's private copy is not.
+func (s *Store) RenameCluster(t Target, oldName, newName string) ([]string, error) {
+	var moved []string
+	err := s.editTargetBackup(t, "renamecluster", func(cfg *api.Config) error {
+		var err error
+		moved, err = kubecfg.RenameCluster(cfg, oldName, newName)
+		return err
+	})
+	return moved, err
+}
+
+// editTargetBackup is editTarget with a backup of the bytes it read, taken
+// after the edit succeeds and before the file is written. Shell copies are
+// throwaway and are not backed up.
+func (s *Store) editTargetBackup(t Target, op string, edit func(*api.Config) error) error {
+	return fsutil.WithLocks(s.writeLocks(t.Project, t.Path), func() error {
+		data, err := readProjectFile(t.Path)
+		if err != nil {
+			return err
+		}
+		cfg, err := kubecfg.LoadBytes(data, t.Path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", t.Path, err)
+		}
+		if err := edit(cfg); err != nil {
+			return err
+		}
+		if !t.InShell {
+			// A failed prune only leaves old backups behind; the new one exists.
+			if _, _, err := s.backupData(t.Project, op, data, t.Path); err != nil {
+				return err
+			}
+		}
+		return kubecfg.Save(cfg, t.Path)
+	})
+}
+
 // checkShellKubeconfig accepts only a single path directly inside ShellsDir():
 // a KUBECONFIG changed inside the kx shell must never make ctx/ns edit some
 // other file.

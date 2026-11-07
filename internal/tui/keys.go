@@ -112,6 +112,10 @@ func (m *Model) paneKey(k string) tea.Cmd {
 		switch k {
 		case "n":
 			return m.startNamespace()
+		case "e":
+			return m.startEditContext()
+		case "r":
+			return m.startRenameContext()
 		case "d":
 			return m.startDeleteContext()
 		}
@@ -299,7 +303,7 @@ func (m Model) hints() []hint {
 	}
 	switch m.focus {
 	case paneContexts:
-		return []hint{{"enter", "set current"}, {"n", "namespace"}, {"d", "delete"}, {"/", "filter"}, {":", "commands"}, helpHint}
+		return []hint{{"enter", "set current"}, {"n", "namespace"}, {"e", "edit"}, {"d", "delete"}, {"/", "filter"}, {":", "commands"}, helpHint}
 	case paneDetails:
 		return []hint{{"tab", "next pane"}, {":", "commands"}, helpHint}
 	}

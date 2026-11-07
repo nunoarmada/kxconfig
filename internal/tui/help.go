@@ -36,6 +36,7 @@ func (m *Model) helpGroups() []helpGroup {
 		}},
 		{name: "CONTEXTS", entries: []helpEntry{
 			{"enter", "set as current context"}, {"n", "set namespace"},
+			{"e", "edit: rename context / cluster"}, {"r", "rename context"},
 			{"d", "delete context (and orphans)"},
 		}},
 		{name: "PALETTE", inline: "import  rename  delete  backups  shell  edit  doctor  reload  quit"},
