@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/nunoarmada/kxconfig/compare/v2.1.0...v2.2.0) (2026-11-07)
+
+
+### Features
+
+* **kx:** rename contexts and clusters from the TUI and the CLI ([#16](https://github.com/nunoarmada/kxconfig/issues/16)) ([3f70b0b](https://github.com/nunoarmada/kxconfig/commit/3f70b0bf2fa691d073295d295ddebdc3b1058212))
+
 ## [2.1.0](https://github.com/nunoarmada/kxconfig/compare/v2.0.1...v2.1.0) (2026-10-29)
 
 
