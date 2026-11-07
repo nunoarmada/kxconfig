@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"k8s.io/client-go/tools/clientcmd/api"
 )
@@ -159,4 +161,78 @@ func AuthKind(a *api.AuthInfo) string {
 		return "basic"
 	}
 	return "none"
+}
+
+// ValidEntityName reports why name cannot name a context, cluster or user,
+// or "" when it can. kubeconfig allows almost anything; kx refuses what
+// would be unreadable or break shells: empty names, surrounding spaces and
+// control characters.
+func ValidEntityName(name string) string {
+	switch {
+	case name == "":
+		return "name is empty"
+	case strings.TrimSpace(name) != name:
+		return "name starts or ends with a space"
+	case len(name) > 253:
+		return "name is longer than 253 bytes"
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) || r == unicode.ReplacementChar {
+			return "name has a control or invalid character"
+		}
+	}
+	return ""
+}
+
+// RenameContext renames context oldName to newName, keeping it current if it
+// was. Renaming to the same name is a no-op.
+func RenameContext(cfg *api.Config, oldName, newName string) error {
+	c := cfg.Contexts[oldName]
+	if c == nil {
+		return fmt.Errorf("context %q not found", oldName)
+	}
+	if oldName == newName {
+		return nil
+	}
+	if msg := ValidEntityName(newName); msg != "" {
+		return fmt.Errorf("invalid context name %q: %s", newName, msg)
+	}
+	if cfg.Contexts[newName] != nil {
+		return fmt.Errorf("context %q already exists", newName)
+	}
+	delete(cfg.Contexts, oldName)
+	cfg.Contexts[newName] = c
+	if cfg.CurrentContext == oldName {
+		cfg.CurrentContext = newName
+	}
+	return nil
+}
+
+// RenameCluster renames cluster oldName to newName and repoints every
+// context that used it. It returns the contexts it repointed, sorted.
+// Renaming to the same name is a no-op.
+func RenameCluster(cfg *api.Config, oldName, newName string) ([]string, error) {
+	cl := cfg.Clusters[oldName]
+	if cl == nil {
+		return nil, fmt.Errorf("cluster %q not found", oldName)
+	}
+	if oldName == newName {
+		return nil, nil
+	}
+	if msg := ValidEntityName(newName); msg != "" {
+		return nil, fmt.Errorf("invalid cluster name %q: %s", newName, msg)
+	}
+	if cfg.Clusters[newName] != nil {
+		return nil, fmt.Errorf("cluster %q already exists", newName)
+	}
+	delete(cfg.Clusters, oldName)
+	cfg.Clusters[newName] = cl
+	var moved []string
+	for _, name := range names(cfg, KindContext) {
+		if c := cfg.Contexts[name]; c != nil && c.Cluster == oldName {
+			c.Cluster = newName
+			moved = append(moved, name)
+		}
+	}
+	return moved, nil
 }

@@ -469,7 +469,7 @@ func TestHintBar(t *testing.T) {
 	m := open(t, fixture(t), 140, 30)
 	mustContain(t, lastLine(plain(m)), "enter use  / filter  i import  r rename  D delete  b backups  s shell  e edit  : commands  ? help")
 	m = keys(m, "tab")
-	mustContain(t, lastLine(plain(m)), "enter set current  n namespace  d delete  / filter  : commands  ? help")
+	mustContain(t, lastLine(plain(m)), "enter set current  n namespace  e edit  d delete  / filter  : commands  ? help")
 	m = keys(m, "tab")
 	mustContain(t, lastLine(plain(m)), "tab next pane  : commands  ? help")
 	// Narrow: items drop from the right, "? help" stays.

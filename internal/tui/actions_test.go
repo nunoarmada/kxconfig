@@ -830,6 +830,9 @@ var openers = map[string][]string{
 	"restore confirm": {"b", "enter"},
 	"namespace":       {"tab", "n"},
 	"delete context":  {"tab", "d"},
+	"edit context":    {"tab", "e"},
+	"rename context":  {"tab", "r"},
+	"rename cluster":  {"tab", "e", "c"},
 	"palette":         {":"},
 	"help":            {"?"},
 	"adopt":           {}, // set up separately
@@ -914,6 +917,8 @@ func TestDialogsFitEverySize(t *testing.T) {
 		"restore":        func(m Model) Model { return keys(m, "b", "enter") },
 		"namespace":      func(m Model) Model { return keys(m, "tab", "n") },
 		"delete context": func(m Model) Model { return keys(m, "tab", "j", "d") },
+		"edit context":   func(m Model) Model { return keys(m, "tab", "e") },
+		"rename cluster": func(m Model) Model { return keys(m, "tab", "e", "c") },
 		"palette":        func(m Model) Model { return keys(m, ":") },
 		"doctor":         func(m Model) Model { return keys(typeText(keys(m, ":"), "doctor"), "enter") },
 	}
@@ -976,6 +981,8 @@ func TestASCIIModeDialogs(t *testing.T) {
 	file := conflictingIncoming(t)
 	for name, ks := range map[string][]string{
 		"delete context": {"tab", "j", "d"},
+		"edit context":   {"tab", "e"},
+		"rename cluster": {"tab", "e", "c"},
 		"delete active":  {"D"},
 		"delete":         {"k", "D"},
 		"rename":         {"r"},

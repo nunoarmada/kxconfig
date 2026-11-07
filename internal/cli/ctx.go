@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -166,5 +167,84 @@ func (a *app) completeContexts(project, toComplete string) []string {
 			out = append(out, c.Name)
 		}
 	}
+	return out
+}
+
+func (a *app) newRenameCtx() *cobra.Command {
+	var project string
+	cmd := &cobra.Command{
+		Use:   "rename-ctx OLD NEW",
+		Short: "Rename a context (the name kubectl shows)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			t, err := a.Store.Target(project, a.Env)
+			if err != nil {
+				return err
+			}
+			a.warnForeignKubeconfig(t.Path)
+			if err := a.Store.RenameContext(t, args[0], args[1]); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(a.Out, "Renamed context %s to %s\n", safetext.Clean(args[0]), safetext.Clean(args[1]))
+			return nil
+		},
+	}
+	a.projectFlag(cmd, &project, "edit project `NAME`'s file instead of the current one")
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return a.completeContexts(project, toComplete), cobra.ShellCompDirectiveNoFileComp
+	}
+	return cmd
+}
+
+func (a *app) newRenameCluster() *cobra.Command {
+	var project string
+	cmd := &cobra.Command{
+		Use:   "rename-cluster OLD NEW",
+		Short: "Rename a cluster and repoint the contexts that use it",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			t, err := a.Store.Target(project, a.Env)
+			if err != nil {
+				return err
+			}
+			a.warnForeignKubeconfig(t.Path)
+			moved, err := a.Store.RenameCluster(t, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(a.Out, "Renamed cluster %s to %s (%s updated)\n", safetext.Clean(args[0]), safetext.Clean(args[1]), plural(len(moved), "context"))
+			return nil
+		},
+	}
+	a.projectFlag(cmd, &project, "edit project `NAME`'s file instead of the current one")
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return a.completeClusters(project, toComplete), cobra.ShellCompDirectiveNoFileComp
+	}
+	return cmd
+}
+
+// completeClusters completes cluster names of the file ctx/ns would edit.
+func (a *app) completeClusters(project, toComplete string) []string {
+	t, err := a.Store.Target(project, a.Env)
+	if err != nil {
+		return nil
+	}
+	cfg, err := kubecfg.Load(t.Path)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for name := range cfg.Clusters {
+		if strings.HasPrefix(name, toComplete) {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
 	return out
 }

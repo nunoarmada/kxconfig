@@ -70,6 +70,8 @@ Contexts pane:
 |---|---|
 | `enter` | set as the current context |
 | `n` | set the namespace |
+| `e` | edit: rename the context, or the cluster it uses (every context on that cluster follows) |
+| `r` | rename the context |
 | `d` | delete the context (and its orphaned cluster and user) |
 
 ## Commands
@@ -85,6 +87,8 @@ Every command except `kx` itself works without a terminal. Commands that would a
 | `kx import FILE [-p PROJECT] [--replace] [--on-conflict fail\|rename\|overwrite\|skip] [--use] [--yes]` | merge a kubeconfig into a project, or replace the project with it; creates the project if missing |
 | `kx ctx [NAME] [-p PROJECT]` | list contexts, or switch the current one |
 | `kx ns NAMESPACE [-p PROJECT]` | set the namespace of the current context (a DNS-1123 name; `""` clears it) |
+| `kx rename-ctx OLD NEW [-p PROJECT]` | rename a context (the name `kubectl` shows); the current context follows |
+| `kx rename-cluster OLD NEW [-p PROJECT]` | rename a cluster and repoint every context that uses it |
 | `kx rm-ctx CONTEXT [-p PROJECT] [--keep-orphans] [--yes]` | delete a context and the cluster and user only it used |
 | `kx rename OLD NEW` | rename a project |
 | `kx delete PROJECT [--force] [--yes]` | delete a project (a backup is kept; `--force` for the active one) |

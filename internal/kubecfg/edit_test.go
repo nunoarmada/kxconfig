@@ -207,3 +207,79 @@ func TestContextsRedactsServer(t *testing.T) {
 		t.Fatalf("RedactServer = %q", got)
 	}
 }
+
+func TestRenameContextKeepsCurrent(t *testing.T) {
+	cfg := editCfg()
+	if err := RenameContext(cfg, "a", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Contexts["a"] != nil || cfg.Contexts["alpha"] == nil {
+		t.Fatal("context not renamed")
+	}
+	if cfg.CurrentContext != "alpha" {
+		t.Fatalf("current = %q, want alpha", cfg.CurrentContext)
+	}
+	if cfg.Contexts["alpha"].Cluster != "ca" {
+		t.Fatal("context content changed")
+	}
+}
+
+func TestRenameContextErrors(t *testing.T) {
+	for name, tc := range map[string][2]string{
+		"missing": {"zz", "y"},
+		"taken":   {"a", "b"},
+		"empty":   {"a", ""},
+		"spaces":  {"a", " a "},
+		"control": {"a", "a\x1bb"},
+	} {
+		cfg := editCfg()
+		if err := RenameContext(cfg, tc[0], tc[1]); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+		if cfg.Contexts["a"] == nil || cfg.CurrentContext != "a" {
+			t.Errorf("%s: config changed on error", name)
+		}
+	}
+	if err := RenameContext(editCfg(), "a", "a"); err != nil {
+		t.Errorf("same name: %v", err)
+	}
+}
+
+func TestRenameClusterRepointsContexts(t *testing.T) {
+	cfg := editCfg()
+	cfg.Contexts["b"].Cluster = "ca" // a and b share ca now
+	moved, err := RenameCluster(cfg, "ca", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(moved, []string{"a", "b"}) {
+		t.Fatalf("moved = %v", moved)
+	}
+	if cfg.Clusters["ca"] != nil || cfg.Clusters["main"] == nil {
+		t.Fatal("cluster not renamed")
+	}
+	for _, n := range []string{"a", "b"} {
+		if cfg.Contexts[n].Cluster != "main" {
+			t.Errorf("context %s still points at %q", n, cfg.Contexts[n].Cluster)
+		}
+	}
+	if cfg.Contexts["c"].Cluster != "cc" {
+		t.Error("unrelated context changed")
+	}
+}
+
+func TestRenameClusterErrors(t *testing.T) {
+	for name, tc := range map[string][2]string{
+		"missing": {"zz", "y"},
+		"taken":   {"ca", "cb"},
+		"empty":   {"ca", ""},
+	} {
+		cfg := editCfg()
+		if _, err := RenameCluster(cfg, tc[0], tc[1]); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+		if cfg.Clusters["ca"] == nil || cfg.Contexts["a"].Cluster != "ca" {
+			t.Errorf("%s: config changed on error", name)
+		}
+	}
+}

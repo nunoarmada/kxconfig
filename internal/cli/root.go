@@ -65,7 +65,7 @@ Without arguments it opens the interactive UI (needs a terminal).`,
 
 	root.AddCommand(
 		a.newUse(), a.newImport(), a.newLs(), a.newCurrent(),
-		a.newCtx(), a.newNs(), a.newRmCtx(),
+		a.newCtx(), a.newNs(), a.newRmCtx(), a.newRenameCtx(), a.newRenameCluster(),
 		a.newRename(), a.newDelete(), a.newBackups(), a.newRestore(),
 		a.newShell(), a.newDoctor(), a.newVersion(),
 	)
